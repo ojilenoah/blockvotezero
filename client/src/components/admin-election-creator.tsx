@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -10,172 +11,159 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { useWallet } from './walletContext'; // Assumed wallet context hook
+import { Loader2, Plus, Trash } from "lucide-react";
+import { createElection } from "../../utils/blockchain";
+import { useMetaMask } from "../hooks/use-metamask";
 
-interface AdminElectionCreatorProps {
-  isElectionActive: boolean;
-}
-
-type Candidate = {
-  id: number;
-  name: string;
-  party: string;
-};
-
-const electionFormSchema = z.object({
-  name: z.string().min(5, { message: "Election name must be at least 5 characters" }),
-  startTime: z.string().refine(date => new Date(date) > new Date(), {
-    message: "Start time must be in the future",
-  }),
-  endTime: z.string().refine(date => new Date(date) > new Date(), {
-    message: "End time must be in the future",
-  }),
-}).refine(data => new Date(data.endTime) > new Date(data.startTime), {
-  message: "End time must be after start time",
-  path: ["endTime"],
+// Define the form schema with zod
+const formSchema = z.object({
+  name: z.string().min(3, { message: "Election name must be at least 3 characters." }),
+  startDate: z.string().min(1, { message: "Start date is required." }),
+  startTime: z.string().min(1, { message: "Start time is required." }),
+  endDate: z.string().min(1, { message: "End date is required." }),
+  endTime: z.string().min(1, { message: "End time is required." }),
 });
 
-type ElectionFormValues = z.infer<typeof electionFormSchema>;
-
-export function AdminElectionCreator({ isElectionActive }: AdminElectionCreatorProps) {
+export function AdminElectionCreator() {
   const { toast } = useToast();
-  const [candidates, setCandidates] = useState<Candidate[]>([
-    { id: 1, name: "", party: "" },
-    { id: 2, name: "", party: "" },
-  ]);
-  const [creationSuccess, setCreationSuccess] = useState(false);
-  const [transactionHash, setTransactionHash] = useState("");
+  const { isConnected } = useMetaMask();
+  const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const { walletAddress, connectWallet } = useWallet(); // Using the wallet hook
+  const [success, setSuccess] = useState<boolean>(false);
+  const [candidates, setCandidates] = useState<Array<{ name: string; party: string }>>([
+    { name: "", party: "" },
+    { name: "", party: "" },
+  ]);
 
-
-  const form = useForm<ElectionFormValues>({
-    resolver: zodResolver(electionFormSchema),
+  // Initialize the form
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
     defaultValues: {
       name: "",
+      startDate: "",
       startTime: "",
+      endDate: "",
       endTime: "",
     },
   });
 
-  const handleAddCandidate = () => {
-    const newId = candidates.length > 0 
-      ? Math.max(...candidates.map(c => c.id)) + 1 
-      : 1;
-
-    setCandidates([...candidates, { id: newId, name: "", party: "" }]);
+  const addCandidate = () => {
+    setCandidates([...candidates, { name: "", party: "" }]);
   };
 
-  const handleRemoveCandidate = (id: number) => {
+  const removeCandidate = (index: number) => {
     if (candidates.length <= 2) {
       toast({
-        title: "Error",
-        description: "At least two candidates are required",
+        title: "Cannot remove candidate",
+        description: "At least two candidates are required for an election.",
         variant: "destructive",
       });
       return;
     }
-
-    setCandidates(candidates.filter(c => c.id !== id));
+    const newCandidates = [...candidates];
+    newCandidates.splice(index, 1);
+    setCandidates(newCandidates);
   };
 
-  const handleCandidateChange = (id: number, field: 'name' | 'party', value: string) => {
-    setCandidates(
-      candidates.map(c => 
-        c.id === id ? { ...c, [field]: value } : c
-      )
-    );
+  const updateCandidate = (index: number, field: "name" | "party", value: string) => {
+    const newCandidates = [...candidates];
+    newCandidates[index][field] = value;
+    setCandidates(newCandidates);
   };
 
-  const handleSubmit = async (data: ElectionFormValues) => {
-    setIsSubmitting(true);
+  const validateCandidates = () => {
+    // Check if all candidates have names
+    return candidates.every((candidate) => candidate.name.trim() !== "");
+  };
+
+  const onSubmit = async (data: z.infer<typeof formSchema>) => {
     setError(null);
+    setSuccess(false);
 
-    if (!walletAddress) {
-      setError("Please connect your wallet.");
-      setIsSubmitting(false);
+    if (!isConnected) {
+      setError("Wallet not connected. Please connect your admin wallet.");
       return;
     }
 
-    try {
-      // Create arrays for candidate names and parties
-      const candidateNames = candidates.map(c => c.name);
-      const candidateParties = candidates.map(c => c.party);
+    // Validate candidates
+    if (!validateCandidates()) {
+      setError("All candidates must have names.");
+      return;
+    }
 
-      // Call the blockchain utility to create the election using connected wallet
+    setIsCreating(true);
+
+    try {
+      const startDateTime = new Date(`${data.startDate}T${data.startTime}`);
+      const endDateTime = new Date(`${data.endDate}T${data.endTime}`);
+
+      // Basic validation
+      if (startDateTime >= endDateTime) {
+        setError("End time must be after start time.");
+        setIsCreating(false);
+        return;
+      }
+
+      // Split candidates into names and parties arrays
+      const candidateNames = candidates.map((c) => c.name);
+      const candidateParties = candidates.map((c) => c.party || "Independent");
+
+      // Call blockchain function
       const result = await createElection(
-        walletAddress, //Using walletAddress instead of privateKey
         data.name,
-        data.startTime,
-        data.endTime,
+        startDateTime,
+        endDateTime,
         candidateNames,
         candidateParties
       );
-      setTransactionHash(result.transactionHash);
-      setCreationSuccess(true);
-      toast({
-        title: "Election created",
-        description: "Successfully deployed to blockchain",
-      });
-    } catch (error: any) {
-      setError(error.message);
+
+      if (result.success) {
+        setSuccess(true);
+        toast({
+          title: "Election created successfully",
+          description: `Transaction hash: ${result.transactionHash.slice(0, 10)}...`,
+          variant: "default",
+        });
+        // Reset the form
+        form.reset();
+        setCandidates([
+          { name: "", party: "" },
+          { name: "", party: "" },
+        ]);
+      } else {
+        setError(result.error || "Failed to create election");
+      }
+    } catch (err: any) {
+      console.error("Error creating election:", err);
+      setError(err.message || "An unexpected error occurred");
     } finally {
-      setIsSubmitting(false);
+      setIsCreating(false);
     }
   };
 
-  if (creationSuccess) {
-    return (
-      <div className="space-y-6">
-        <Alert className="bg-green-50 border-green-200">
-          <div className="flex items-center gap-2">
-            <svg className="h-5 w-5 text-green-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-            </svg>
-            <AlertTitle className="text-green-800">Election Created Successfully</AlertTitle>
-          </div>
-          <AlertDescription className="mt-3 text-green-700">
-            <p>Your election has been successfully created and deployed to the blockchain.</p>
-            <div className="mt-3">
-              <p className="font-semibold">Transaction Hash:</p>
-              <p className="font-mono text-xs break-all bg-white p-2 rounded border border-green-200 mt-1">
-                {transactionHash}
-              </p>
-            </div>
-          </AlertDescription>
-          <div className="mt-4">
-            <Button onClick={() => {
-              setCreationSuccess(false);
-              form.reset();
-              setCandidates([
-                { id: 1, name: "", party: "" },
-                { id: 2, name: "", party: "" },
-              ]);
-            }}>
-              Create Another Election
-            </Button>
-          </div>
-        </Alert>
-      </div>
-    );
-  }
-
   return (
-    <div>
-      {isElectionActive && (
-        <Alert variant="destructive" className="mb-6">
-          <AlertTitle>Active Election in Progress</AlertTitle>
-          <AlertDescription>
-            You cannot create a new election while another one is active. 
-            Please wait for the current election to end.
-          </AlertDescription>
-        </Alert>
-      )}
+    <Card>
+      <CardContent className="p-6">
+        <h2 className="text-2xl font-bold mb-6">Create New Election</h2>
 
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
-          <div className="space-y-4">
+        {error && (
+          <Alert variant="destructive" className="mb-6">
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
+        {success && (
+          <Alert className="mb-6 bg-green-50 border-green-500 text-green-700">
+            <AlertTitle>Success</AlertTitle>
+            <AlertDescription>
+              Election created successfully! It will appear in the active elections once the start time is reached.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <FormField
               control={form.control}
               name="name"
@@ -183,26 +171,53 @@ export function AdminElectionCreator({ isElectionActive }: AdminElectionCreatorP
                 <FormItem>
                   <FormLabel>Election Name</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g. 2023 Community Council Election" {...field} disabled={isElectionActive} />
+                    <Input placeholder="Presidential Election 2024" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="startDate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Start Date</FormLabel>
+                    <FormControl>
+                      <Input type="date" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
               <FormField
                 control={form.control}
                 name="startTime"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Start Date & Time</FormLabel>
+                    <FormLabel>Start Time</FormLabel>
                     <FormControl>
-                      <Input type="datetime-local" {...field} disabled={isElectionActive} />
+                      <Input type="time" {...field} />
                     </FormControl>
-                    <FormDescription>
-                      When voting begins
-                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="endDate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>End Date</FormLabel>
+                    <FormControl>
+                      <Input type="date" {...field} />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -213,92 +228,80 @@ export function AdminElectionCreator({ isElectionActive }: AdminElectionCreatorP
                 name="endTime"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>End Date & Time</FormLabel>
+                    <FormLabel>End Time</FormLabel>
                     <FormControl>
-                      <Input type="datetime-local" {...field} disabled={isElectionActive} />
+                      <Input type="time" {...field} />
                     </FormControl>
-                    <FormDescription>
-                      When voting ends
-                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
               />
             </div>
-          </div>
 
-          <Separator className="my-6" />
+            <Separator className="my-6" />
 
-          <div>
-            <h3 className="text-lg font-medium mb-4">Candidates</h3>
-            <div className="space-y-4">
-              {candidates.map(candidate => (
-                <Card key={candidate.id} className="bg-gray-50">
-                  <CardContent className="pt-6">
-                    <div className="flex justify-between items-center mb-3">
-                      <h4 className="font-medium">Candidate #{candidate.id}</h4>
+            <div>
+              <h3 className="text-lg font-semibold mb-4">Candidates</h3>
+              <div className="space-y-4">
+                {candidates.map((candidate, index) => (
+                  <div key={index} className="grid grid-cols-5 gap-4 items-center">
+                    <div className="col-span-2">
+                      <Label htmlFor={`candidate-name-${index}`}>Name</Label>
+                      <Input
+                        id={`candidate-name-${index}`}
+                        value={candidate.name}
+                        onChange={(e) => updateCandidate(index, "name", e.target.value)}
+                        placeholder="Candidate Name"
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <Label htmlFor={`candidate-party-${index}`}>Party (Optional)</Label>
+                      <Input
+                        id={`candidate-party-${index}`}
+                        value={candidate.party}
+                        onChange={(e) => updateCandidate(index, "party", e.target.value)}
+                        placeholder="Political Party"
+                      />
+                    </div>
+                    <div className="pt-7">
                       <Button
                         type="button"
                         variant="outline"
-                        size="sm"
-                        onClick={() => handleRemoveCandidate(candidate.id)}
-                        disabled={isElectionActive}
+                        size="icon"
+                        onClick={() => removeCandidate(index)}
+                        disabled={candidates.length <= 2}
                       >
-                        Remove
+                        <Trash className="h-4 w-4" />
                       </Button>
                     </div>
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                      <div>
-                        <Label htmlFor={`candidate-${candidate.id}-name`}>Candidate Name</Label>
-                        <Input
-                          id={`candidate-${candidate.id}-name`}
-                          placeholder="Full name"
-                          value={candidate.name}
-                          onChange={(e) => handleCandidateChange(candidate.id, 'name', e.target.value)}
-                          disabled={isElectionActive}
-                          className="mt-1"
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor={`candidate-${candidate.id}-party`}>Party Affiliation</Label>
-                        <Input
-                          id={`candidate-${candidate.id}-party`}
-                          placeholder="Party name"
-                          value={candidate.party}
-                          onChange={(e) => handleCandidateChange(candidate.id, 'party', e.target.value)}
-                          disabled={isElectionActive}
-                          className="mt-1"
-                        />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                  </div>
+                ))}
+              </div>
 
               <Button
                 type="button"
                 variant="outline"
-                onClick={handleAddCandidate}
-                disabled={isElectionActive}
-                className="w-full"
+                onClick={addCandidate}
+                className="mt-4"
               >
-                Add Another Candidate
+                <Plus className="h-4 w-4 mr-2" /> Add Candidate
               </Button>
             </div>
-          </div>
 
-          <div className="flex justify-end">
-            <Button type="submit" size="lg" disabled={isElectionActive} onClick={() => {
-              if(!walletAddress){
-                connectWallet()
-              }
-            }}>
-              Create Election
-            </Button>
-          {error && <p className="text-red-500 mt-2">{error}</p>}
-          </div>
-        </form>
-      </Form>
-    </div>
+            <div className="pt-4">
+              <Button type="submit" disabled={isCreating} className="w-full">
+                {isCreating ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Creating Election...
+                  </>
+                ) : (
+                  "Create Election"
+                )}
+              </Button>
+            </div>
+          </form>
+        </Form>
+      </CardContent>
+    </Card>
   );
 }

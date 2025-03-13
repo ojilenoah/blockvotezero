@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from "react";
 import { useMetaMask } from "./use-metamask";
-import { isAdmin } from "../../../utils/blockchain";
+import { isAdmin } from "../../utils/blockchain";
 
 export function useAdmin() {
   const { isConnected, account } = useMetaMask();
@@ -48,10 +48,11 @@ export function useAdmin() {
     sessionStorage.removeItem("adminAddress");
   };
 
-  return { 
-    isAdmin: isAdminUser, 
-    isCheckingAdmin, 
+  return {
+    isAdmin: isAdminUser,
+    isCheckingAdmin,
     error,
+    adminAddress: account,
     logout
   };
 }
