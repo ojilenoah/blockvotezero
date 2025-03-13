@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
+import { useMetaMask } from "../hooks/use-metamask";
 
 interface AdminManagementProps {
   currentAddress: string;
@@ -24,6 +25,10 @@ export function AdminManagement({ currentAddress }: AdminManagementProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [signatureError, setSignatureError] = useState<string | null>(null);
+  
+  // Use the MetaMask hook for signature verification
+  const { account, signMessage } = useMetaMask();
   
   const form = useForm<WalletAddressValues>({
     resolver: zodResolver(walletAddressSchema),
@@ -32,24 +37,54 @@ export function AdminManagement({ currentAddress }: AdminManagementProps) {
     },
   });
   
-  const onSubmit = (data: WalletAddressValues) => {
+  const onSubmit = async (data: WalletAddressValues) => {
     setIsSubmitting(true);
+    setSignatureError(null);
     
-    // Simulate MetaMask signing
+    if (!account) {
+      setSignatureError("No wallet connected. Please connect your wallet first.");
+      setIsSubmitting(false);
+      return;
+    }
+    
+    // Message to sign includes data to prevent replay attacks
+    const messageToSign = `I authorize changing the admin address to ${data.address} from ${currentAddress}. Timestamp: ${Date.now()}`;
+    
     toast({
-      title: "Connecting to MetaMask",
-      description: "Please sign the transaction to change admin",
+      title: "MetaMask Signature Required",
+      description: "Please sign the message to confirm this admin change",
     });
     
-    setTimeout(() => {
+    try {
+      // Request signature from MetaMask
+      const signature = await signMessage(messageToSign);
+      
+      if (signature) {
+        // In a real application, you would send the signature, message, and new address to the backend
+        // for verification and storage. Here we just simulate a successful update.
+        setIsSubmitting(false);
+        setSuccess(true);
+        
+        toast({
+          title: "Admin updated",
+          description: `Admin wallet changed to ${data.address}`,
+        });
+        
+        // Update the session storage with the new admin address
+        sessionStorage.setItem("adminAddress", data.address);
+      } else {
+        throw new Error("Failed to get signature");
+      }
+    } catch (error: any) {
       setIsSubmitting(false);
-      setSuccess(true);
+      setSignatureError(error.message || "Failed to sign the message. Please try again.");
       
       toast({
-        title: "Admin updated",
-        description: `Admin wallet changed to ${data.address}`,
+        title: "Signature Failed",
+        description: "Failed to sign admin change request",
+        variant: "destructive"
       });
-    }, 2000);
+    }
   };
   
   return (

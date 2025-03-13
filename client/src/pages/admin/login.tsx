@@ -1,66 +1,67 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useMetaMask } from "../../hooks/use-metamask";
+import { Loader2 } from "lucide-react";
 
 export default function AdminLogin() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Use the MetaMask hook
+  const { 
+    isMetaMaskInstalled,
+    isConnecting,
+    isConnected,
+    account,
+    connect
+  } = useMetaMask();
 
-  // Simulated admin address
-  const ADMIN_ADDRESS = "0x123...789";
+  // List of authorized admin addresses (in a real app, this would come from a backend)
+  // For testing, this can be set to your actual MetaMask address
+  const ADMIN_ADDRESSES = [
+    "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", // Default Hardhat test address
+    "0x70997970C51812dc3A010C7d01b50e0d17dc79C8", // Second Hardhat test address
+    // Add your MetaMask address here for testing
+  ];
+  
+  // Check if the connected account is an admin
+  useEffect(() => {
+    if (isConnected && account) {
+      const isAdmin = ADMIN_ADDRESSES.includes(account);
+      
+      if (isAdmin) {
+        toast({
+          title: "Authentication successful",
+          description: "Welcome, admin!",
+          variant: "default",
+        });
+        
+        // Store admin status in session storage
+        sessionStorage.setItem("isAdmin", "true");
+        sessionStorage.setItem("adminAddress", account);
+        
+        // Redirect to admin dashboard
+        setLocation("/admin/dashboard");
+      } else if (account) {
+        setError("This wallet is not authorized as an admin. Please connect with the admin wallet.");
+      }
+    }
+  }, [isConnected, account, toast, setLocation]);
   
   const handleConnectWallet = async () => {
-    setIsConnecting(true);
     setError(null);
     
-    // Simulate MetaMask connection
-    setTimeout(() => {
-      try {
-        // Check if window.ethereum exists (MetaMask)
-        if (typeof window !== "undefined" && "ethereum" in window) {
-          toast({
-            title: "MetaMask detected",
-            description: "Requesting account access..."
-          });
-          
-          // Simulate successful connection
-          // In a real implementation, this would be:
-          // const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-          const simulatedAccount = Math.random() > 0.3 
-            ? "0x123...789"  // Admin address (70% chance)
-            : "0x456...012"; // Non-admin address (30% chance)
-          
-          if (simulatedAccount === ADMIN_ADDRESS) {
-            toast({
-              title: "Authentication successful",
-              description: "Welcome, admin!",
-              variant: "default",
-            });
-            
-            // Store admin status in session storage
-            sessionStorage.setItem("isAdmin", "true");
-            sessionStorage.setItem("adminAddress", simulatedAccount);
-            
-            // Redirect to admin dashboard
-            setLocation("/admin/dashboard");
-          } else {
-            setError("This wallet is not authorized as an admin. Please connect with the admin wallet.");
-          }
-        } else {
-          setError("MetaMask not detected. Please install MetaMask and try again.");
-        }
-      } catch (err) {
-        setError("Failed to connect to MetaMask. Please try again.");
-        console.error(err);
-      } finally {
-        setIsConnecting(false);
-      }
-    }, 1500);
+    try {
+      await connect();
+    } catch (err: any) {
+      setError(err.message || "Failed to connect to MetaMask. Please try again.");
+      console.error(err);
+    }
   };
 
   return (
