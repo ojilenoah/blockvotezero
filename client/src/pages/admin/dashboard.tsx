@@ -5,10 +5,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { AdminNavbar } from "@/components/admin-navbar";
-import { AdminElectionCreator } from "@/components/admin-election-creator";
-import { AdminManagement } from "@/components/admin-management";
-import { mockElectionData } from "@/data/mock-data";
+import { AdminNavbar } from "../../components/admin-navbar";
+import { AdminElectionCreator } from "../../components/admin-election-creator";
+import { AdminManagement } from "../../components/admin-management";
+import { mockElectionData } from "../../data/mock-data";
 
 export default function AdminDashboard() {
   const [, setLocation] = useLocation();
@@ -138,7 +138,7 @@ export default function AdminDashboard() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex flex-col items-center justify-between md:flex-row">
             <p className="text-sm text-gray-500">
-              &copy; {new Date().getFullYear()} Blockchain Voting Admin Panel
+              &copy; {new Date().getFullYear()} BlockVote Admin Panel
             </p>
             <p className="text-sm text-gray-500 mt-2 md:mt-0">
               Secure Blockchain-Based Voting System
