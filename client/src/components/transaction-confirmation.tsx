@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { useMetaMask } from "../hooks/use-metamask";
+import { ExternalLink, Copy, Check } from "lucide-react";
 
 interface TransactionConfirmationProps {
   transactionHash: string;
@@ -15,7 +17,31 @@ export function TransactionConfirmation({
   timestamp,
 }: TransactionConfirmationProps) {
   const { toast } = useToast();
+  const { chainId } = useMetaMask();
   const [copied, setCopied] = useState(false);
+
+  // Get the appropriate explorer URL based on the current network
+  const getExplorerUrl = (hash: string) => {
+    if (!chainId) return `https://etherscan.io/tx/${hash}`;
+    
+    // Convert decimal to hex if needed
+    const hexChainId = chainId.startsWith("0x") ? chainId : `0x${parseInt(chainId).toString(16)}`;
+    
+    switch (hexChainId.toLowerCase()) {
+      case "0x1": // Ethereum Mainnet
+        return `https://etherscan.io/tx/${hash}`;
+      case "0x5": // Goerli Testnet
+        return `https://goerli.etherscan.io/tx/${hash}`;
+      case "0xaa36a7": // Sepolia Testnet
+        return `https://sepolia.etherscan.io/tx/${hash}`;
+      case "0x89": // Polygon
+        return `https://polygonscan.com/tx/${hash}`;
+      case "0x13881": // Mumbai Testnet
+        return `https://mumbai.polygonscan.com/tx/${hash}`;
+      default:
+        return `https://etherscan.io/tx/${hash}`; // Default to Ethereum mainnet
+    }
+  };
 
   const handleCopyHash = () => {
     navigator.clipboard.writeText(transactionHash);
@@ -29,25 +55,17 @@ export function TransactionConfirmation({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleViewOnExplorer = () => {
+    const url = getExplorerUrl(transactionHash);
+    window.open(url, '_blank');
+  };
+
   return (
     <Card className="max-w-2xl mx-auto">
       <CardHeader className="pb-4">
         <div className="flex justify-center mb-4">
           <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
-            <svg 
-              xmlns="http://www.w3.org/2000/svg" 
-              className="h-8 w-8 text-green-600" 
-              fill="none" 
-              viewBox="0 0 24 24" 
-              stroke="currentColor"
-            >
-              <path 
-                strokeLinecap="round" 
-                strokeLinejoin="round" 
-                strokeWidth={2} 
-                d="M5 13l4 4L19 7" 
-              />
-            </svg>
+            <Check className="h-8 w-8 text-green-600" />
           </div>
         </div>
         <CardTitle className="text-center text-2xl">Vote Confirmed</CardTitle>
@@ -70,35 +88,9 @@ export function TransactionConfirmation({
                 className="flex items-center"
               >
                 {copied ? (
-                  <svg 
-                    xmlns="http://www.w3.org/2000/svg" 
-                    className="h-4 w-4 mr-1" 
-                    fill="none" 
-                    viewBox="0 0 24 24" 
-                    stroke="currentColor"
-                  >
-                    <path 
-                      strokeLinecap="round" 
-                      strokeLinejoin="round" 
-                      strokeWidth={2} 
-                      d="M5 13l4 4L19 7" 
-                    />
-                  </svg>
+                  <Check className="h-4 w-4 mr-1" />
                 ) : (
-                  <svg 
-                    xmlns="http://www.w3.org/2000/svg" 
-                    className="h-4 w-4 mr-1" 
-                    fill="none" 
-                    viewBox="0 0 24 24" 
-                    stroke="currentColor"
-                  >
-                    <path 
-                      strokeLinecap="round" 
-                      strokeLinejoin="round" 
-                      strokeWidth={2} 
-                      d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" 
-                    />
-                  </svg>
+                  <Copy className="h-4 w-4 mr-1" />
                 )}
                 {copied ? "Copied" : "Copy"}
               </Button>
@@ -144,21 +136,12 @@ export function TransactionConfirmation({
         </div>
         
         <div className="flex justify-center">
-          <Button variant="outline" className="w-full sm:w-auto">
-            <svg 
-              xmlns="http://www.w3.org/2000/svg" 
-              className="h-5 w-5 mr-2" 
-              fill="none" 
-              viewBox="0 0 24 24" 
-              stroke="currentColor"
-            >
-              <path 
-                strokeLinecap="round" 
-                strokeLinejoin="round" 
-                strokeWidth={2} 
-                d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" 
-              />
-            </svg>
+          <Button 
+            variant="outline" 
+            className="w-full sm:w-auto" 
+            onClick={handleViewOnExplorer}
+          >
+            <ExternalLink className="h-5 w-5 mr-2" />
             View on Explorer
           </Button>
         </div>
