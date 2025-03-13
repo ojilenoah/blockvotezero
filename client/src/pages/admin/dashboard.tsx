@@ -1,74 +1,146 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AdminNavbar } from "@/components/admin-navbar";
-import { AdminElectionCreator } from "@/components/admin-election-creator";
-import { AdminElectionList } from "@/components/admin-election-list";
-import { AdminManagement } from "@/components/admin-management";
-import { useAdmin } from "@/hooks/use-admin";
-import { useMetaMask } from "@/hooks/use-metamask";
-import { Loader2 } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/hooks/use-toast";
+import { AdminNavbar } from "../../components/admin-navbar";
+import { AdminElectionCreator } from "../../components/admin-election-creator";
+import { AdminManagement } from "../../components/admin-management";
+import { mockElectionData } from "../../data/mock-data";
+// Placeholder -  This hook needs to be implemented elsewhere
+const useMetaMask = () => ({ isConnected: false, account: "" });
 
 export default function AdminDashboard() {
   const [, setLocation] = useLocation();
-  const { isAdmin, isCheckingAdmin } = useAdmin();
-  const { isConnected } = useMetaMask();
+  const { toast } = useToast();
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [adminAddress, setAdminAddress] = useState<string>("");
+  // Use MetaMask hook to get current account
+  const { isConnected, account } = useMetaMask();
 
-  // Check if user is authenticated
+  // Check if admin is logged in
   useEffect(() => {
-    if (!isConnected) {
+    const isAdmin = sessionStorage.getItem("isAdmin");
+    if (!isAdmin || !isConnected) {
       setLocation("/admin/login");
-      return;
+    } else {
+      setAdminAddress(account || sessionStorage.getItem("adminAddress") || "");
     }
+  }, [setLocation, isConnected, account]);
 
-    if (!isCheckingAdmin && !isAdmin) {
-      setLocation("/admin/login");
-    }
-  }, [isConnected, isAdmin, isCheckingAdmin, setLocation]);
+  const handleLogout = () => {
+    sessionStorage.removeItem("isAdmin");
+    sessionStorage.removeItem("adminAddress");
+    setIsAuthenticated(false);
+    toast({
+      title: "Logged out",
+      description: "Successfully logged out from admin panel",
+    });
+    setLocation("/admin/login");
+  };
 
-  if (isCheckingAdmin) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-          <p className="text-lg">Verifying admin status...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // If we're still checking, or user is not admin, don't render the dashboard
-  if (!isAdmin) {
-    return null;
+  if (!isAuthenticated) {
+    return <div className="p-8 text-center">Authenticating...</div>;
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <AdminNavbar />
+    <div className="min-h-screen flex flex-col">
+      <AdminNavbar address={adminAddress} onLogout={handleLogout} />
 
-      <div className="container mx-auto py-8 px-4">
-        <h1 className="text-3xl font-bold mb-8">Admin Dashboard</h1>
+      <main className="flex-grow">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="flex justify-between items-center mb-6">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
+              <p className="text-gray-600">Manage elections and system settings</p>
+            </div>
+            <div className="flex items-center space-x-2">
+              <div className="text-sm text-gray-500 text-right mr-2">
+                <div>Connected as:</div>
+                <div className="font-mono">{adminAddress}</div>
+              </div>
+              <Button variant="outline" onClick={handleLogout}>Logout</Button>
+            </div>
+          </div>
 
-        <Tabs defaultValue="create">
-          <TabsList className="grid w-full grid-cols-3 mb-8">
-            <TabsTrigger value="create">Create Election</TabsTrigger>
-            <TabsTrigger value="manage">Manage Elections</TabsTrigger>
-            <TabsTrigger value="admin">Admin Settings</TabsTrigger>
-          </TabsList>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle>Active Elections</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold">{mockElectionData.currentElection.isActive ? "1" : "0"}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle>Total Elections</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold">27</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle>Registered Voters</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold">187,245</div>
+              </CardContent>
+            </Card>
+          </div>
 
-          <TabsContent value="create" className="mt-0">
-            <AdminElectionCreator />
-          </TabsContent>
+          <Tabs defaultValue="create">
+            <TabsList className="mb-6">
+              <TabsTrigger value="create">Create Election</TabsTrigger>
+              <TabsTrigger value="manage">Manage Admin</TabsTrigger>
+            </TabsList>
 
-          <TabsContent value="manage" className="mt-0">
-            <AdminElectionList />
-          </TabsContent>
+            <TabsContent value="create">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Create New Election</CardTitle>
+                  <CardDescription>
+                    Set up a new election to be deployed to the blockchain
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <AdminElectionCreator isElectionActive={mockElectionData.currentElection.isActive} />
+                </CardContent>
+              </Card>
+            </TabsContent>
 
-          <TabsContent value="admin" className="mt-0">
-            <AdminManagement />
-          </TabsContent>
-        </Tabs>
-      </div>
+            <TabsContent value="manage">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Admin Management</CardTitle>
+                  <CardDescription>
+                    Update admin wallet address with MetaMask signature verification
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <AdminManagement currentAddress={adminAddress} />
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </div>
+      </main>
+
+      <footer className="border-t border-gray-200 mt-auto">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="flex flex-col items-center justify-between md:flex-row">
+            <p className="text-sm text-gray-500">
+              &copy; {new Date().getFullYear()} BlockVote Admin Panel
+            </p>
+            <p className="text-sm text-gray-500 mt-2 md:mt-0">
+              Secure Blockchain-Based Voting System
+            </p>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
