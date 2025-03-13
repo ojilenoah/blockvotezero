@@ -29,7 +29,11 @@ export default function AdminLogin() {
   // Check if the connected account is an admin
   useEffect(() => {
     if (isConnected && account) {
-      const isAdmin = ADMIN_ADDRESSES.includes(account);
+      // Convert addresses to lowercase for case-insensitive comparison
+      const normalizedAccount = account.toLowerCase();
+      const normalizedAdminAddresses = ADMIN_ADDRESSES.map(addr => addr.toLowerCase());
+
+      const isAdmin = normalizedAdminAddresses.includes(normalizedAccount);
 
       if (isAdmin) {
         toast({
