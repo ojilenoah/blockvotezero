@@ -43,29 +43,31 @@ export default function Vote() {
     setIsSubmitting(true);
 
     try {
-      // If not connected to MetaMask, connect first
-      if (!isConnected || !account) {
+      // First connect to MetaMask if not connected
+      if (!isConnected) {
         await connect();
       }
 
-      // Generate a transaction hash for demo purposes
-      const hash = "0x" + Array.from({ length: 64 }, () =>
-        Math.floor(Math.random() * 16).toString(16)
-      ).join("");
+      // Only proceed if connection was successful
+      if (isConnected && account) {
+        // Generate a transaction hash for demo purposes
+        const hash = "0x" + Array.from({ length: 64 }, () =>
+          Math.floor(Math.random() * 16).toString(16)
+        ).join("");
 
-      const timestamp = new Date().toLocaleString();
+        const timestamp = new Date().toLocaleString();
 
-      // Show confirmation immediately after successful connection
-      setTransactionHash(hash);
-      setTransactionTimestamp(timestamp);
-      setHasVoted(true);
-      setCurrentStep(VotingStep.TRANSACTION_CONFIRMATION);
+        // Show confirmation after successful connection
+        setTransactionHash(hash);
+        setTransactionTimestamp(timestamp);
+        setHasVoted(true);
+        setCurrentStep(VotingStep.TRANSACTION_CONFIRMATION);
 
-      toast({
-        title: "Vote submitted",
-        description: "Your vote has been recorded on the blockchain"
-      });
-
+        toast({
+          title: "Vote submitted",
+          description: "Your vote has been recorded on the blockchain"
+        });
+      }
     } catch (error: any) {
       console.error("Vote casting error:", error);
       toast({
