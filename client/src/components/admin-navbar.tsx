@@ -11,14 +11,14 @@ interface AdminNavbarProps {
 
 export function AdminNavbar({ address, onLogout }: AdminNavbarProps) {
   const { isConnected, chainId } = useMetaMask();
-  
+
   // Determine network name based on chainId
   const getNetworkName = (id: string | null) => {
     if (!id) return "Unknown";
-    
+
     // Convert decimal to hex if needed
     const hexChainId = id.startsWith("0x") ? id : `0x${parseInt(id).toString(16)}`;
-    
+
     switch (hexChainId.toLowerCase()) {
       case "0x1":
         return "Ethereum Mainnet";
@@ -36,13 +36,13 @@ export function AdminNavbar({ address, onLogout }: AdminNavbarProps) {
         return `Chain ID: ${id}`;
     }
   };
-  
+
   return (
     <nav className="border-b border-gray-200 bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
-          <div className="flex">
-            <div className="flex-shrink-0 flex items-center">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
               <Link href="/">
                 <div className="flex items-center cursor-pointer">
                   <svg className="h-8 w-8 text-primary" viewBox="0 0 24 24" fill="currentColor">
@@ -52,29 +52,24 @@ export function AdminNavbar({ address, onLogout }: AdminNavbarProps) {
                 </div>
               </Link>
             </div>
-            <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
+            <div className="hidden sm:ml-6 sm:flex sm:items-center">
               <Link href="/admin/dashboard">
-                <div className="inline-flex items-center px-1 pt-1 border-b-2 border-primary text-sm font-medium text-gray-900 cursor-pointer">
+                <Button variant="ghost" className="text-sm font-medium">
                   Dashboard
-                </div>
+                </Button>
               </Link>
               <Link href="/">
-                <div className="inline-flex items-center px-1 pt-1 border-b-2 border-transparent text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700 cursor-pointer">
+                <Button variant="ghost" className="text-sm font-medium">
                   View Public Site
-                </div>
+                </Button>
               </Link>
             </div>
           </div>
           <div className="flex items-center">
-            {isConnected ? (
+            {isConnected && (
               <Badge variant="outline" className="mr-3 bg-green-50 text-green-700 border-green-200 flex items-center">
                 <Check size={14} className="mr-1" /> 
                 <span className="hidden md:inline">{getNetworkName(chainId)}</span>
-              </Badge>
-            ) : (
-              <Badge variant="outline" className="mr-3 bg-amber-50 text-amber-700 border-amber-200 flex items-center">
-                <AlertCircle size={14} className="mr-1" /> 
-                <span className="hidden md:inline">Wallet Disconnected</span>
               </Badge>
             )}
             <div className="text-sm text-gray-500 mr-4">
