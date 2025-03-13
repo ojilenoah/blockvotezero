@@ -1,6 +1,5 @@
 import { Link, useLocation } from "wouter";
 import { useState } from "react";
-import { WalletButton } from "./wallet-button";
 
 export function Navbar() {
   const [location] = useLocation();
@@ -40,7 +39,6 @@ export function Navbar() {
             </div>
           </div>
           <div className="flex items-center">
-            <WalletButton />
             <div className="ml-3 sm:hidden">
               <button 
                 type="button" 

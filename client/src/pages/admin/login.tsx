@@ -22,11 +22,10 @@ export default function AdminLogin() {
   } = useMetaMask();
 
   // List of authorized admin addresses (in a real app, this would come from a backend)
-  // For testing, this can be set to your actual MetaMask address
   const ADMIN_ADDRESSES = [
+    "0x2B3d7c0A2A05f760272165A836D1aDFE8ea38490", // User specified admin address
     "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", // Default Hardhat test address
-    "0x70997970C51812dc3A010C7d01b50e0d17dc79C8", // Second Hardhat test address
-    // Add your MetaMask address here for testing
+    "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"  // Second Hardhat test address
   ];
   
   // Check if the connected account is an admin
