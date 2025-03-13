@@ -10,6 +10,7 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { useWallet } from './walletContext'; // Assumed wallet context hook
 
 interface AdminElectionCreatorProps {
   isElectionActive: boolean;
@@ -44,7 +45,11 @@ export function AdminElectionCreator({ isElectionActive }: AdminElectionCreatorP
   ]);
   const [creationSuccess, setCreationSuccess] = useState(false);
   const [transactionHash, setTransactionHash] = useState("");
-  
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { walletAddress, connectWallet } = useWallet(); // Using the wallet hook
+
+
   const form = useForm<ElectionFormValues>({
     resolver: zodResolver(electionFormSchema),
     defaultValues: {
@@ -53,15 +58,15 @@ export function AdminElectionCreator({ isElectionActive }: AdminElectionCreatorP
       endTime: "",
     },
   });
-  
+
   const handleAddCandidate = () => {
     const newId = candidates.length > 0 
       ? Math.max(...candidates.map(c => c.id)) + 1 
       : 1;
-      
+
     setCandidates([...candidates, { id: newId, name: "", party: "" }]);
   };
-  
+
   const handleRemoveCandidate = (id: number) => {
     if (candidates.length <= 2) {
       toast({
@@ -71,10 +76,10 @@ export function AdminElectionCreator({ isElectionActive }: AdminElectionCreatorP
       });
       return;
     }
-    
+
     setCandidates(candidates.filter(c => c.id !== id));
   };
-  
+
   const handleCandidateChange = (id: number, field: 'name' | 'party', value: string) => {
     setCandidates(
       candidates.map(c => 
@@ -82,41 +87,44 @@ export function AdminElectionCreator({ isElectionActive }: AdminElectionCreatorP
       )
     );
   };
-  
-  const onSubmit = (data: ElectionFormValues) => {
-    // Validate candidates
-    const invalidCandidates = candidates.some(c => !c.name || !c.party);
-    
-    if (invalidCandidates) {
-      toast({
-        title: "Invalid candidates",
-        description: "All candidates must have a name and party",
-        variant: "destructive",
-      });
+
+  const handleSubmit = async (data: ElectionFormValues) => {
+    setIsSubmitting(true);
+    setError(null);
+
+    if (!walletAddress) {
+      setError("Please connect your wallet.");
+      setIsSubmitting(false);
       return;
     }
-    
-    // Simulate blockchain transaction
-    toast({
-      title: "Creating election",
-      description: "Connecting to blockchain via MetaMask...",
-    });
-    
-    setTimeout(() => {
-      const hash = "0x" + Array.from({ length: 64 }, () => 
-        Math.floor(Math.random() * 16).toString(16)
-      ).join("");
-      
-      setTransactionHash(hash);
+
+    try {
+      // Create arrays for candidate names and parties
+      const candidateNames = candidates.map(c => c.name);
+      const candidateParties = candidates.map(c => c.party);
+
+      // Call the blockchain utility to create the election using connected wallet
+      const result = await createElection(
+        walletAddress, //Using walletAddress instead of privateKey
+        data.name,
+        data.startTime,
+        data.endTime,
+        candidateNames,
+        candidateParties
+      );
+      setTransactionHash(result.transactionHash);
       setCreationSuccess(true);
-      
       toast({
         title: "Election created",
         description: "Successfully deployed to blockchain",
       });
-    }, 2000);
+    } catch (error: any) {
+      setError(error.message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
-  
+
   if (creationSuccess) {
     return (
       <div className="space-y-6">
@@ -152,7 +160,7 @@ export function AdminElectionCreator({ isElectionActive }: AdminElectionCreatorP
       </div>
     );
   }
-  
+
   return (
     <div>
       {isElectionActive && (
@@ -164,9 +172,9 @@ export function AdminElectionCreator({ isElectionActive }: AdminElectionCreatorP
           </AlertDescription>
         </Alert>
       )}
-      
+
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
           <div className="space-y-4">
             <FormField
               control={form.control}
@@ -181,7 +189,7 @@ export function AdminElectionCreator({ isElectionActive }: AdminElectionCreatorP
                 </FormItem>
               )}
             />
-            
+
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <FormField
                 control={form.control}
@@ -199,7 +207,7 @@ export function AdminElectionCreator({ isElectionActive }: AdminElectionCreatorP
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={form.control}
                 name="endTime"
@@ -218,9 +226,9 @@ export function AdminElectionCreator({ isElectionActive }: AdminElectionCreatorP
               />
             </div>
           </div>
-          
+
           <Separator className="my-6" />
-          
+
           <div>
             <h3 className="text-lg font-medium mb-4">Candidates</h3>
             <div className="space-y-4">
@@ -266,7 +274,7 @@ export function AdminElectionCreator({ isElectionActive }: AdminElectionCreatorP
                   </CardContent>
                 </Card>
               ))}
-              
+
               <Button
                 type="button"
                 variant="outline"
@@ -278,11 +286,16 @@ export function AdminElectionCreator({ isElectionActive }: AdminElectionCreatorP
               </Button>
             </div>
           </div>
-          
+
           <div className="flex justify-end">
-            <Button type="submit" size="lg" disabled={isElectionActive}>
+            <Button type="submit" size="lg" disabled={isElectionActive} onClick={() => {
+              if(!walletAddress){
+                connectWallet()
+              }
+            }}>
               Create Election
             </Button>
+          {error && <p className="text-red-500 mt-2">{error}</p>}
           </div>
         </form>
       </Form>

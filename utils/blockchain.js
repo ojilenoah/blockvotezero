@@ -22,10 +22,15 @@ const getReadOnlyContract = () => {
 };
 
 // Initialize contract instance with signer for write operations
-const getSignedContract = (privateKey) => {
-  const provider = getProvider();
-  const wallet = new ethers.Wallet(privateKey, provider);
-  return new ethers.Contract(CONTRACT_ADDRESS, VotingSystemABI, wallet);
+const getConnectedWalletContract = async () => {
+  if (!window.ethereum) {
+    throw new Error("MetaMask is not installed!");
+  }
+
+  await window.ethereum.request({ method: "eth_requestAccounts" });
+  const provider = new ethers.providers.Web3Provider(window.ethereum);
+  const signer = provider.getSigner();
+  return new ethers.Contract(CONTRACT_ADDRESS, VotingSystemABI, signer);
 };
 
 // Admin Operations
@@ -37,29 +42,17 @@ export const isAdmin = async (address) => {
   return admin.toLowerCase() === address.toLowerCase();
 };
 
-// Get address from private key
-export const getAddressFromPrivateKey = (privateKey) => {
-  try {
-    const wallet = new ethers.Wallet(privateKey);
-    return wallet.address;
-  } catch (error) {
-    console.error("Invalid private key:", error);
-    return null;
-  }
-};
-
-// Create an election
+// Create an election using connected wallet
 export const createElection = async (
-  privateKey,
   name,
   startTime,
   endTime,
   candidateNames,
   candidateParties,
 ) => {
-  const contract = getSignedContract(privateKey);
-
   try {
+    const contract = await getConnectedWalletContract();
+    
     const tx = await contract.createElection(
       name,
       Math.floor(startTime.getTime() / 1000), // Convert to Unix timestamp
@@ -76,11 +69,11 @@ export const createElection = async (
   }
 };
 
-// Change admin
-export const changeAdmin = async (privateKey, newAdminAddress) => {
-  const contract = getSignedContract(privateKey);
-
+// Change admin using connected wallet
+export const changeAdmin = async (newAdminAddress) => {
   try {
+    const contract = await getConnectedWalletContract();
+    
     const tx = await contract.changeAdmin(newAdminAddress);
     const receipt = await tx.wait();
     return { success: true, transactionHash: receipt.transactionHash };
