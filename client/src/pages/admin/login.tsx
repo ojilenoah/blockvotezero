@@ -21,9 +21,9 @@ export default function AdminLogin() {
     connect
   } = useMetaMask();
 
-  // List of authorized admin addresses (in a real app, this would come from a backend)
+  // List of authorized admin addresses
   const ADMIN_ADDRESSES = [
-    "0x2B3d7c0A2A05f760272165A836D1aDFE8ea38490", // User specified admin address
+    "0x2B3d7c0A2A05f760272165A836D1aDFE8ea38490", // Authorized admin address
   ];
 
   // Check if the connected account is an admin
@@ -44,7 +44,7 @@ export default function AdminLogin() {
 
         // Redirect to admin dashboard
         setLocation("/admin/dashboard");
-      } else if (account) {
+      } else {
         setError("This wallet is not authorized as an admin. Please connect with the admin wallet.");
       }
     }
@@ -52,7 +52,6 @@ export default function AdminLogin() {
 
   const handleConnectWallet = async () => {
     setError(null);
-    
     try {
       await connect();
     } catch (err: any) {
@@ -76,7 +75,7 @@ export default function AdminLogin() {
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
-          
+
           <div className="flex flex-col space-y-4">
             <Button 
               className="w-full" 
@@ -86,10 +85,7 @@ export default function AdminLogin() {
             >
               {isConnecting ? (
                 <span className="flex items-center">
-                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Connecting...
                 </span>
               ) : (
@@ -104,7 +100,7 @@ export default function AdminLogin() {
                 </span>
               )}
             </Button>
-            
+
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
                 <span className="w-full border-t"></span>
@@ -115,7 +111,7 @@ export default function AdminLogin() {
                 </span>
               </div>
             </div>
-            
+
             <p className="text-sm text-center text-gray-500">
               Only authorized wallets can access the admin panel.
               <br />
