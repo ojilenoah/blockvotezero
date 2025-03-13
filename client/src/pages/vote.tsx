@@ -49,6 +49,36 @@ export default function Vote() {
     if (!selectedCandidate) return;
     
     setIsSubmitting(true);
+    
+    try {
+      // Mock transaction for demonstration
+      const txHash = generateRandomHex(64);
+      const timestamp = new Date().toISOString();
+      
+      // Set transaction information
+      setTransactionHash(txHash);
+      setTransactionTimestamp(timestamp);
+      
+      // Simulate transaction delay
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      // Update state to show confirmation
+      setHasVoted(true);
+      setCurrentStep(VotingStep.TRANSACTION_CONFIRMATION);
+      
+      toast({
+        title: "Vote cast successfully!",
+        description: "Your vote has been recorded on the blockchain.",
+      });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Failed to cast vote",
+        description: "There was an error processing your transaction."
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
 
     try {
       // If not connected to MetaMask, connect first
@@ -192,6 +222,16 @@ export default function Vote() {
               </div>
             )}
           </div>
+        );
+      
+      case VotingStep.TRANSACTION_CONFIRMATION:
+        return (
+          <TransactionConfirmation 
+            transactionHash={transactionHash}
+            timestamp={transactionTimestamp}
+            candidateName={selectedCandidate?.name || ""}
+            candidateParty={selectedCandidate?.party || ""}
+          />
         );
       
       default:
