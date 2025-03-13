@@ -26,49 +26,50 @@ export function AdminManagement({ currentAddress }: AdminManagementProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [signatureError, setSignatureError] = useState<string | null>(null);
-
+  
   // Use the MetaMask hook for signature verification
   const { account, signMessage } = useMetaMask();
-
+  
   const form = useForm<WalletAddressValues>({
     resolver: zodResolver(walletAddressSchema),
     defaultValues: {
       address: "",
     },
   });
-
+  
   const onSubmit = async (data: WalletAddressValues) => {
     setIsSubmitting(true);
     setSignatureError(null);
-
+    
     if (!account) {
       setSignatureError("No wallet connected. Please connect your wallet first.");
       setIsSubmitting(false);
       return;
     }
-
+    
     // Message to sign includes data to prevent replay attacks
     const messageToSign = `I authorize changing the admin address to ${data.address} from ${currentAddress}. Timestamp: ${Date.now()}`;
-
+    
     toast({
       title: "MetaMask Signature Required",
       description: "Please sign the message to confirm this admin change",
     });
-
+    
     try {
       // Request signature from MetaMask
       const signature = await signMessage(messageToSign);
-
+      
       if (signature) {
         // In a real application, you would send the signature, message, and new address to the backend
         // for verification and storage. Here we just simulate a successful update.
-        setSuccess(true);
         setIsSubmitting(false);
+        setSuccess(true);
+        
         toast({
           title: "Admin updated",
           description: `Admin wallet changed to ${data.address}`,
         });
-
+        
         // Update the session storage with the new admin address
         sessionStorage.setItem("adminAddress", data.address);
       } else {
@@ -77,7 +78,7 @@ export function AdminManagement({ currentAddress }: AdminManagementProps) {
     } catch (error: any) {
       setIsSubmitting(false);
       setSignatureError(error.message || "Failed to sign the message. Please try again.");
-
+      
       toast({
         title: "Signature Failed",
         description: "Failed to sign admin change request",
@@ -85,7 +86,7 @@ export function AdminManagement({ currentAddress }: AdminManagementProps) {
       });
     }
   };
-
+  
   return (
     <div className="space-y-6">
       <div>
@@ -94,7 +95,7 @@ export function AdminManagement({ currentAddress }: AdminManagementProps) {
           <span className="font-mono">{currentAddress}</span>
         </div>
       </div>
-
+      
       {success && (
         <Alert className="bg-green-50 border-green-200">
           <div className="flex items-center gap-2">
@@ -117,7 +118,7 @@ export function AdminManagement({ currentAddress }: AdminManagementProps) {
           </div>
         </Alert>
       )}
-
+      
       {!success && (
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
@@ -128,7 +129,7 @@ export function AdminManagement({ currentAddress }: AdminManagementProps) {
                 This operation requires MetaMask signature confirmation.
               </AlertDescription>
             </Alert>
-
+            
             <FormField
               control={form.control}
               name="address"
@@ -145,7 +146,7 @@ export function AdminManagement({ currentAddress }: AdminManagementProps) {
                 </FormItem>
               )}
             />
-
+            
             <div className="flex justify-end">
               <Button type="submit" disabled={isSubmitting}>
                 {isSubmitting ? "Confirming..." : "Update Admin Address"}

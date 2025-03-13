@@ -9,27 +9,32 @@ import { AdminNavbar } from "../../components/admin-navbar";
 import { AdminElectionCreator } from "../../components/admin-election-creator";
 import { AdminManagement } from "../../components/admin-management";
 import { mockElectionData } from "../../data/mock-data";
-// Placeholder -  This hook needs to be implemented elsewhere
-const useMetaMask = () => ({ isConnected: false, account: "" });
 
 export default function AdminDashboard() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [adminAddress, setAdminAddress] = useState<string>("");
-  // Use MetaMask hook to get current account
-  const { isConnected, account } = useMetaMask();
-
-  // Check if admin is logged in
+  
   useEffect(() => {
-    const isAdmin = sessionStorage.getItem("isAdmin");
-    if (!isAdmin || !isConnected) {
+    // Check if user is authenticated as admin
+    const isAdmin = sessionStorage.getItem("isAdmin") === "true";
+    const storedAddress = sessionStorage.getItem("adminAddress");
+    
+    if (!isAdmin || !storedAddress) {
+      toast({
+        title: "Authentication required",
+        description: "Please login with an admin wallet",
+        variant: "destructive",
+      });
       setLocation("/admin/login");
-    } else {
-      setAdminAddress(account || sessionStorage.getItem("adminAddress") || "");
+      return;
     }
-  }, [setLocation, isConnected, account]);
-
+    
+    setIsAuthenticated(true);
+    setAdminAddress(storedAddress);
+  }, [setLocation, toast]);
+  
   const handleLogout = () => {
     sessionStorage.removeItem("isAdmin");
     sessionStorage.removeItem("adminAddress");
@@ -40,15 +45,15 @@ export default function AdminDashboard() {
     });
     setLocation("/admin/login");
   };
-
+  
   if (!isAuthenticated) {
     return <div className="p-8 text-center">Authenticating...</div>;
   }
-
+  
   return (
     <div className="min-h-screen flex flex-col">
       <AdminNavbar address={adminAddress} onLogout={handleLogout} />
-
+      
       <main className="flex-grow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="flex justify-between items-center mb-6">
@@ -64,7 +69,7 @@ export default function AdminDashboard() {
               <Button variant="outline" onClick={handleLogout}>Logout</Button>
             </div>
           </div>
-
+          
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
             <Card>
               <CardHeader className="pb-2">
@@ -91,13 +96,13 @@ export default function AdminDashboard() {
               </CardContent>
             </Card>
           </div>
-
+          
           <Tabs defaultValue="create">
             <TabsList className="mb-6">
               <TabsTrigger value="create">Create Election</TabsTrigger>
               <TabsTrigger value="manage">Manage Admin</TabsTrigger>
             </TabsList>
-
+            
             <TabsContent value="create">
               <Card>
                 <CardHeader>
@@ -111,7 +116,7 @@ export default function AdminDashboard() {
                 </CardContent>
               </Card>
             </TabsContent>
-
+            
             <TabsContent value="manage">
               <Card>
                 <CardHeader>
@@ -128,7 +133,7 @@ export default function AdminDashboard() {
           </Tabs>
         </div>
       </main>
-
+      
       <footer className="border-t border-gray-200 mt-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex flex-col items-center justify-between md:flex-row">

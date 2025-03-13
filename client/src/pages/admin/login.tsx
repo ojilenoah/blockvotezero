@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -7,13 +6,11 @@ import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useMetaMask } from "../../hooks/use-metamask";
 import { Loader2 } from "lucide-react";
-import { isAdmin } from "../../../utils/blockchain";
 
 export default function AdminLogin() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [error, setError] = useState<string | null>(null);
-  const [isChecking, setIsChecking] = useState<boolean>(false);
 
   // Use the MetaMask hook
   const { 
@@ -24,40 +21,37 @@ export default function AdminLogin() {
     connect
   } = useMetaMask();
 
+  // List of authorized admin addresses
+  const ADMIN_ADDRESSES = [
+    "0x2B3d7c0A2A05f760272165A836D1aDFE8ea38490", // Authorized admin address
+  ];
+
   // Check if the connected account is an admin
   useEffect(() => {
-    const checkAdminStatus = async () => {
-      if (isConnected && account) {
-        setIsChecking(true);
-        try {
-          const adminStatus = await isAdmin(account);
-          
-          if (adminStatus) {
-            toast({
-              title: "Authentication successful",
-              description: "Welcome, admin!",
-              variant: "default",
-            });
-            
-            // Store admin status in session storage
-            sessionStorage.setItem("isAdmin", "true");
-            sessionStorage.setItem("adminAddress", account);
+    if (isConnected && account) {
+      // Convert addresses to lowercase for case-insensitive comparison
+      const normalizedAccount = account.toLowerCase();
+      const normalizedAdminAddresses = ADMIN_ADDRESSES.map(addr => addr.toLowerCase());
 
-            // Redirect to admin dashboard
-            setLocation("/admin/dashboard");
-          } else {
-            setError("This wallet is not authorized as an admin. Please connect with the admin wallet.");
-          }
-        } catch (err: any) {
-          setError(`Error verifying admin status: ${err.message}`);
-          console.error(err);
-        } finally {
-          setIsChecking(false);
-        }
+      const isAdmin = normalizedAdminAddresses.includes(normalizedAccount);
+
+      if (isAdmin) {
+        toast({
+          title: "Authentication successful",
+          description: "Welcome, admin!",
+          variant: "default",
+        });
+
+        // Store admin status in session storage
+        sessionStorage.setItem("isAdmin", "true");
+        sessionStorage.setItem("adminAddress", account);
+
+        // Redirect to admin dashboard
+        setLocation("/admin/dashboard");
+      } else {
+        setError("This wallet is not authorized as an admin. Please connect with the admin wallet.");
       }
-    };
-    
-    checkAdminStatus();
+    }
   }, [isConnected, account, toast, setLocation]);
 
   const handleConnectWallet = async () => {
@@ -86,29 +80,30 @@ export default function AdminLogin() {
             </Alert>
           )}
 
-          <div className="space-y-4">
-            {!isMetaMaskInstalled ? (
-              <Alert variant="destructive">
-                <AlertDescription>
-                  MetaMask is not installed. Please install MetaMask to use the admin panel.
-                </AlertDescription>
-              </Alert>
-            ) : (
-              <Button 
-                onClick={handleConnectWallet} 
-                className="w-full"
-                disabled={isConnecting || isChecking}
-              >
-                {isConnecting || isChecking ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    {isConnecting ? "Connecting..." : "Verifying..."}
-                  </>
-                ) : (
-                  "Connect Wallet"
-                )}
-              </Button>
-            )}
+          <div className="flex flex-col space-y-4">
+            <Button 
+              className="w-full" 
+              size="lg"
+              onClick={handleConnectWallet}
+              disabled={isConnecting}
+            >
+              {isConnecting ? (
+                <span className="flex items-center">
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Connecting...
+                </span>
+              ) : (
+                <span className="flex items-center">
+                  <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 35 33" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M32.9582 1L17.9582 10.0000L16.9582 4.8369L32.9582 1Z" fill="#E17726" stroke="#E17726" strokeWidth="0.25" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M2.83203 1L17.6514 10.0000L18.8329 4.8369L2.83203 1Z" fill="#E27625" stroke="#E27625" strokeWidth="0.25" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M28.2783 23.5088L24.7334 28.7866L32.0894 30.7866L34.1761 23.6369L28.2783 23.5088Z" fill="#E27625" stroke="#E27625" strokeWidth="0.25" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M1.62695 23.6292L3.70728 30.7789L11.0567 28.7789L7.51837 23.5011L1.62695 23.6292Z" fill="#E27625" stroke="#E27625" strokeWidth="0.25" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  Connect with MetaMask
+                </span>
+              )}
+            </Button>
 
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
