@@ -11,3 +11,50 @@
     @apply font-sans antialiased bg-background text-foreground;
   }
 }
+
+/* Dark mode overrides */
+.dark .bg-white {
+  @apply bg-gray-900;
+}
+
+.dark .bg-gray-50 {
+  @apply bg-gray-800;
+}
+
+.dark .text-gray-900 {
+  @apply text-gray-100;
+}
+
+.dark .text-gray-800 {
+  @apply text-gray-200;
+}
+
+.dark .text-gray-700 {
+  @apply text-gray-300;
+}
+
+.dark .text-gray-600 {
+  @apply text-gray-400;
+}
+
+/* No change needed for text-gray-500 in dark mode */
+
+.dark .border-gray-200 {
+  @apply border-gray-700;
+}
+
+.dark .shadow-sm {
+  @apply shadow-none;
+}
+
+.dark .hover\:bg-gray-50:hover {
+  @apply hover:bg-gray-800;
+}
+
+.dark .hover\:text-gray-700:hover {
+  @apply hover:text-gray-300;
+}
+
+.dark .hover\:text-gray-800:hover {
+  @apply hover:text-gray-200;
+}

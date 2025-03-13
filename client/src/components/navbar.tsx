@@ -1,6 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { useState } from "react";
 import { WalletButton } from "./wallet-button";
+import { ThemeToggle } from "./theme-toggle";
 
 export function Navbar() {
   const [location] = useLocation();
@@ -12,10 +13,14 @@ export function Navbar() {
         <div className="flex justify-between h-16">
           <div className="flex items-center">
             <div className="flex-shrink-0 flex items-center">
-              <svg className="h-8 w-8 text-primary" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-              </svg>
-              <span className="ml-2 text-xl font-semibold text-gray-900">BlockVote</span>
+              <Link href="/">
+                <a className="flex items-center">
+                  <svg className="h-8 w-8 text-primary" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                  </svg>
+                  <span className="ml-2 text-xl font-semibold text-gray-900">BlockVote</span>
+                </a>
+              </Link>
             </div>
             <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
               <Link href="/">
@@ -35,7 +40,8 @@ export function Navbar() {
               </Link>
             </div>
           </div>
-          <div className="flex items-center">
+          <div className="flex items-center space-x-3">
+            <ThemeToggle />
             <WalletButton />
             <div className="ml-3 sm:hidden">
               <button 
