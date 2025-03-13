@@ -19,6 +19,7 @@ export const mockElectionData = {
     votesCount: "2,450",
     eligibleVoters: "5,400",
     participationPercentage: 45,
+    isActive: true,
   },
   
   topCandidates: [
@@ -67,4 +68,58 @@ export const mockElectionData = {
       participation: "4,192 votes (81% participation)",
     },
   ],
+
+  // User info for voter panel
+  voterInfo: {
+    name: "John A. Citizen",
+    nin: "12345678901",
+    registrationDate: "March 15, 2020",
+    votingDistrict: "Central District"
+  },
+
+  // Candidates for the voter panel
+  candidates: [
+    {
+      id: 1,
+      name: "Sarah Johnson",
+      party: "Progressive Alliance",
+      profileImage: "",
+      biography: "Former educator with 15 years of experience in community organizing. Focused on educational reform and environmental sustainability initiatives."
+    },
+    {
+      id: 2,
+      name: "Michael Chen",
+      party: "Unity Coalition",
+      profileImage: "",
+      biography: "Tech entrepreneur and community advocate. Passionate about digital inclusion and modernizing community services through technology."
+    },
+    {
+      id: 3,
+      name: "Alex Rodriguez",
+      party: "Community First",
+      profileImage: "",
+      biography: "Small business owner and neighborhood association president. Dedicated to economic development and supporting local businesses."
+    },
+    {
+      id: 4,
+      name: "Jamie Taylor",
+      party: "Forward Together",
+      profileImage: "",
+      biography: "Civil rights attorney with a focus on housing equality. Advocates for affordable housing and tenant protection measures."
+    },
+    {
+      id: 5,
+      name: "Dana Williams",
+      party: "Independent",
+      profileImage: "",
+      biography: "Community organizer and social worker. Focuses on youth programs and mental health services for underserved populations."
+    },
+    {
+      id: 6,
+      name: "Morgan Lee",
+      party: "People's Party",
+      profileImage: "",
+      biography: "Urban planner with expertise in sustainable development. Advocates for public transportation improvements and green spaces."
+    }
+  ]
 };
