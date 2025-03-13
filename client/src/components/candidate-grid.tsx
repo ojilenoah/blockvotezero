@@ -81,9 +81,6 @@ function CandidateCard({ candidate, selected, colorIndex, onSelect }: CandidateC
           </div>
         </div>
       </CardHeader>
-      <CardContent className="pb-3">
-        <p className="text-sm text-gray-600 line-clamp-3">{candidate.biography}</p>
-      </CardContent>
       <CardFooter>
         <Button 
           onClick={onSelect} 
