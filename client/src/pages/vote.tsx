@@ -72,16 +72,9 @@ export default function Vote() {
       });
 
       // In a real application, we would create an actual transaction to a voting smart contract
-      // For this demo, we'll simulate a transaction with a signed message
+      // For this demo, we'll simulate a transaction
       
-      // Create a vote message (in a real app, this would be a transaction to a smart contract)
-      const voteMessage = `Vote for candidate ${selectedCandidate.id}: ${selectedCandidate.name} (${selectedCandidate.party}) at ${new Date().toISOString()}`;
-      
-      // Sign the message using MetaMask
-      const signature = await signer.signMessage(voteMessage);
-      
-      // Generate a simulated transaction hash based partly on the signature
-      // In a real app, this would be the actual transaction hash returned from the blockchain
+      // Generate a simulated transaction hash
       const hash = "0x" + generateRandomHex(64);
       
       const now = new Date();

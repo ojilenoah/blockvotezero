@@ -14,7 +14,9 @@ export type MetaMaskState = {
   error: string | null;
 };
 
-export function useMetaMask() {
+// Use a function to create the hook instead of a hook directly
+// This prevents the Fast Refresh error
+export const useMetaMask = function() {
   const { toast } = useToast();
   const [state, setState] = useState<MetaMaskState>({
     isMetaMaskInstalled: false,
@@ -27,11 +29,11 @@ export function useMetaMask() {
     error: null,
   });
 
-  // Detect if MetaMask is installed
+  // Detect if MetaMask is installed without auto-connecting
   useEffect(() => {
     const checkProvider = async () => {
       try {
-        const provider = await detectEthereumProvider();
+        const provider = await detectEthereumProvider({ silent: true });
         
         setState(prevState => ({
           ...prevState,
@@ -76,38 +78,12 @@ export function useMetaMask() {
     window.location.reload();
   }, []);
 
-  // Subscribe to ethereum events
+  // Subscribe to ethereum events without auto-connecting or checking accounts
   useEffect(() => {
     if (window.ethereum) {
-      // Add listeners
+      // Just add listeners, don't check accounts
       window.ethereum.on('accountsChanged', handleAccountsChanged);
       window.ethereum.on('chainChanged', handleChainChanged);
-      
-      // Check for existing connection
-      const checkConnection = async () => {
-        try {
-          const provider = new ethers.BrowserProvider(window.ethereum);
-          const accounts = await provider.listAccounts();
-          const network = await provider.getNetwork();
-          
-          if (accounts.length > 0) {
-            const signer = await provider.getSigner();
-            setState(prevState => ({
-              ...prevState,
-              isConnected: true,
-              account: accounts[0].address,
-              chainId: network.chainId.toString(),
-              provider,
-              signer,
-              error: null
-            }));
-          }
-        } catch (error) {
-          console.error('Error checking connection:', error);
-        }
-      };
-      
-      checkConnection();
       
       // Cleanup
       return () => {
