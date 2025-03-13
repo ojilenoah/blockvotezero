@@ -11,7 +11,7 @@ export default function AdminLogin() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [error, setError] = useState<string | null>(null);
-  
+
   // Use the MetaMask hook
   const { 
     isMetaMaskInstalled,
@@ -24,26 +24,24 @@ export default function AdminLogin() {
   // List of authorized admin addresses (in a real app, this would come from a backend)
   const ADMIN_ADDRESSES = [
     "0x2B3d7c0A2A05f760272165A836D1aDFE8ea38490", // User specified admin address
-    "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", // Default Hardhat test address
-    "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"  // Second Hardhat test address
   ];
-  
+
   // Check if the connected account is an admin
   useEffect(() => {
     if (isConnected && account) {
       const isAdmin = ADMIN_ADDRESSES.includes(account);
-      
+
       if (isAdmin) {
         toast({
           title: "Authentication successful",
           description: "Welcome, admin!",
           variant: "default",
         });
-        
+
         // Store admin status in session storage
         sessionStorage.setItem("isAdmin", "true");
         sessionStorage.setItem("adminAddress", account);
-        
+
         // Redirect to admin dashboard
         setLocation("/admin/dashboard");
       } else if (account) {
@@ -51,7 +49,7 @@ export default function AdminLogin() {
       }
     }
   }, [isConnected, account, toast, setLocation]);
-  
+
   const handleConnectWallet = async () => {
     setError(null);
     

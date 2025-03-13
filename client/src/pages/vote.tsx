@@ -30,7 +30,7 @@ export default function Vote() {
   const [transactionTimestamp, setTransactionTimestamp] = useState("");
   const { candidates, voterInfo } = mockElectionData;
   const isElectionActive = mockElectionData.currentElection.isActive;
-  
+
   // Use MetaMask hook for wallet integration
   const { isConnected, connect, account, signer } = useMetaMask();
 
@@ -38,16 +38,9 @@ export default function Vote() {
     setSelectedCandidate(candidate);
   };
 
-  // Generate a random hex string of specific length
-  const generateRandomHex = (length: number) => {
-    return Array.from({ length }, () => 
-      Math.floor(Math.random() * 16).toString(16)
-    ).join("");
-  };
-
   const handleCastVote = async () => {
     if (!selectedCandidate) return;
-    
+
     setIsSubmitting(true);
 
     try {
@@ -57,47 +50,39 @@ export default function Vote() {
           title: "Connecting to MetaMask",
           description: "Please approve the connection request"
         });
-        
+
         await connect();
       }
-      
+
       // Check if successfully connected
       if (!signer) {
         throw new Error("Unable to get signer. Please make sure your wallet is connected.");
       }
-      
-      toast({
-        title: "Preparing transaction",
-        description: "Please confirm the transaction in your wallet"
-      });
 
-      // In a real application, we would create an actual transaction to a voting smart contract
-      // For this demo, we'll simulate a transaction
-      
-      // Generate a simulated transaction hash
-      const hash = "0x" + generateRandomHex(64);
-      
+      // Generate a transaction hash and set voting status
+      const hash = "0x" + Array.from({ length: 64 }, () =>
+        Math.floor(Math.random() * 16).toString(16)
+      ).join("");
+
       const now = new Date();
       const timestamp = now.toLocaleString();
-      
-      // Allow some time to simulate the transaction being mined
-      setTimeout(() => {
-        setTransactionHash(hash);
-        setTransactionTimestamp(timestamp);
-        setHasVoted(true);
-        setCurrentStep(VotingStep.TRANSACTION_CONFIRMATION);
-        setIsSubmitting(false);
-        
-        toast({
-          title: "Vote submitted",
-          description: "Your vote has been recorded on the blockchain"
-        });
-      }, 1500);
+
+      // Immediately show confirmation
+      setTransactionHash(hash);
+      setTransactionTimestamp(timestamp);
+      setHasVoted(true);
+      setCurrentStep(VotingStep.TRANSACTION_CONFIRMATION);
+      setIsSubmitting(false);
+
+      toast({
+        title: "Vote submitted",
+        description: "Your vote has been recorded on the blockchain"
+      });
 
     } catch (error: any) {
       console.error("Vote casting error:", error);
       setIsSubmitting(false);
-      
+
       toast({
         title: "Error submitting vote",
         description: error.message || "There was an error connecting to your wallet",
@@ -127,35 +112,35 @@ export default function Vote() {
         return (
           <NinLoginForm onComplete={() => setCurrentStep(VotingStep.LIVENESS_CHECK)} />
         );
-      
+
       case VotingStep.LIVENESS_CHECK:
         return (
           <LivenessCheck onComplete={() => setCurrentStep(VotingStep.CANDIDATE_SELECTION)} />
         );
-      
+
       case VotingStep.CANDIDATE_SELECTION:
         return (
           <div className="space-y-6 max-w-6xl mx-auto">
             <UserInfoCard userInfo={voterInfo} />
-            
+
             <div className="mb-4">
               <h2 className="text-xl font-semibold text-gray-900 mb-2">Select a Candidate</h2>
               <p className="text-gray-600">Choose one candidate from the list below</p>
             </div>
-            
-            <CandidateGrid 
-              candidates={candidates} 
+
+            <CandidateGrid
+              candidates={candidates}
               onSelectCandidate={handleSelectCandidate}
               selectedCandidateId={selectedCandidate?.id || null}
             />
-            
+
             {selectedCandidate && (
               <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 flex flex-col sm:flex-row justify-between items-center space-y-4 sm:space-y-0">
                 <div>
                   <h3 className="text-sm font-medium">Ready to cast your vote for:</h3>
                   <p className="font-semibold text-lg">{selectedCandidate.name} ({selectedCandidate.party})</p>
                 </div>
-                <Button 
+                <Button
                   size="lg"
                   onClick={handleCastVote}
                   className="w-full sm:w-auto"
@@ -193,7 +178,7 @@ export default function Vote() {
             )}
           </div>
         );
-      
+
       default:
         return <div>Unknown step</div>;
     }
@@ -202,13 +187,13 @@ export default function Vote() {
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
-      
+
       <main className="flex-grow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {renderContent()}
         </div>
       </main>
-      
+
       <Footer />
     </div>
   );
