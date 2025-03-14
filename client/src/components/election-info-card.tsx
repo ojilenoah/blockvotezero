@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
+import { useQuery } from "@tanstack/react-query";
 import {
   getActiveElectionId,
   getElectionInfo,
@@ -15,84 +16,57 @@ import { Link } from "wouter";
 
 export function ElectionInfoCard() {
   const [viewMode, setViewMode] = useState<'chart' | 'table'>('chart');
-  const [electionData, setElectionData] = useState<any>(null);
-  const [candidates, setCandidates] = useState<any[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
 
-  useEffect(() => {
-    const fetchElectionData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
+  // Query for election data
+  const { data: electionData, isLoading, error: queryError } = useQuery({
+    queryKey: ['activeElection'],
+    queryFn: async () => {
+      // Get active election ID
+      const activeElectionId = await getActiveElectionId();
+      if (!activeElectionId) return null;
 
-        // Get active election ID
-        const activeElectionId = await getActiveElectionId();
-        console.log("Active election ID:", activeElectionId);
+      // Get election info
+      const electionInfo = await getElectionInfo(activeElectionId);
+      if (!electionInfo) return null;
 
-        if (activeElectionId > 0) {
-          // Get election info
-          const electionInfo = await getElectionInfo(activeElectionId);
-          console.log("Election info:", electionInfo);
+      // Determine election status
+      const now = new Date();
+      const startTime = electionInfo.startTime;
+      const endTime = electionInfo.endTime;
+      const isUpcoming = now < startTime;
+      const isActive = now >= startTime && now <= endTime;
 
-          if (electionInfo) {
-            setElectionData({
-              id: activeElectionId,
-              title: electionInfo.name,
-              dateRange: `${electionInfo.startTime.toLocaleDateString()} - ${electionInfo.endTime.toLocaleDateString()}`,
-              schedule: `Voting ${electionInfo.upcoming ? 'starts' : 'closes'} at ${electionInfo.upcoming ? electionInfo.startTime.toLocaleTimeString() : electionInfo.endTime.toLocaleTimeString()}`,
-              description: electionInfo.upcoming
-                ? "This election is scheduled to start soon. Be ready to cast your vote!"
-                : "Your vote matters. Participate in this election to make your voice heard.",
-              isActive: electionInfo.active,
-              isUpcoming: electionInfo.upcoming,
-              startTime: electionInfo.startTime,
-              endTime: electionInfo.endTime
-            });
+      const candidates = !isUpcoming ? await getAllCandidates(activeElectionId) : [];
+      const totalVotes = !isUpcoming ? await getTotalVotes(activeElectionId) : 0;
 
-            // Get candidates if election has started (active or ended)
-            if (!electionInfo.upcoming) {
-              const candidateList = await getAllCandidates(activeElectionId);
-              console.log("Candidates:", candidateList);
+      const candidatesWithPercentages = candidates.map(candidate => ({
+        name: candidate.name,
+        party: candidate.party,
+        votes: candidate.votes || 0,
+        percentage: totalVotes > 0 ? Math.round((candidate.votes / totalVotes) * 100) : 0
+      }));
 
-              if (candidateList && candidateList.length > 0) {
-                const totalVotes = await getTotalVotes(activeElectionId);
-                const candidatesWithPercentages = candidateList.map(candidate => ({
-                  name: candidate.name,
-                  party: candidate.party,
-                  votes: candidate.votes || 0,
-                  percentage: totalVotes > 0 ? Math.round((candidate.votes / totalVotes) * 100) : 0
-                }));
+      return {
+        id: activeElectionId,
+        title: electionInfo.name,
+        dateRange: `${startTime.toLocaleDateString()} - ${endTime.toLocaleDateString()}`,
+        schedule: `Voting ${isUpcoming ? 'starts' : 'closes'} at ${isUpcoming ? startTime.toLocaleTimeString() : endTime.toLocaleTimeString()}`,
+        description: isUpcoming
+          ? "This election is scheduled to start soon. Be ready to cast your vote!"
+          : "Your vote matters. Participate in this election to make your voice heard.",
+        isActive,
+        isUpcoming,
+        startTime,
+        endTime,
+        candidates: candidatesWithPercentages
+      };
+    },
+    staleTime: 30000, // Consider data fresh for 30 seconds
+    refetchInterval: 60000, // Only refetch every minute
+  });
 
-                setCandidates(candidatesWithPercentages);
-              }
-            }
-          } else {
-            setElectionData(null);
-          }
-        } else {
-          setElectionData(null);
-        }
-      } catch (error: any) {
-        console.error("Error fetching election data:", error);
-        setError(error?.message || "Failed to load election data");
-        toast({
-          title: "Error",
-          description: "Failed to load election data",
-          variant: "destructive"
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchElectionData();
-    const interval = setInterval(fetchElectionData, 30000);
-    return () => clearInterval(interval);
-  }, [toast]);
-
-  if (loading) {
+  if (isLoading) {
     return (
       <Card className="bg-white shadow-md rounded-lg p-6 mb-8">
         <div className="flex justify-center items-center h-48">
@@ -102,12 +76,12 @@ export function ElectionInfoCard() {
     );
   }
 
-  if (error) {
+  if (queryError) {
     return (
       <Card className="bg-white shadow-md rounded-lg p-6 mb-8">
         <div className="flex justify-center items-center h-48 flex-col">
           <p className="text-red-500 mb-2">Error loading election data</p>
-          <p className="text-gray-500 text-sm">{error}</p>
+          <p className="text-gray-500 text-sm">{queryError.message}</p>
         </div>
       </Card>
     );
@@ -165,7 +139,7 @@ export function ElectionInfoCard() {
           </Link>
         </div>
 
-        {!electionData.isUpcoming && candidates.length > 0 && (
+        {!electionData.isUpcoming && electionData.candidates.length > 0 && (
           <div className="flex-1 lg:border-l lg:pl-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-medium text-gray-900">Real-time Results</h3>
@@ -192,7 +166,7 @@ export function ElectionInfoCard() {
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
-                      data={candidates}
+                      data={electionData.candidates}
                       cx="50%"
                       cy="50%"
                       innerRadius="60%"
@@ -201,7 +175,7 @@ export function ElectionInfoCard() {
                       dataKey="percentage"
                       nameKey="name"
                     >
-                      {candidates.map((entry, index) => (
+                      {electionData.candidates.map((entry, index) => (
                         <Cell 
                           key={`cell-${index}`} 
                           fill={candidateColors[index % candidateColors.length]} 
@@ -226,7 +200,7 @@ export function ElectionInfoCard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 bg-white">
-                    {candidates.map((candidate, index) => (
+                    {electionData.candidates.map((candidate, index) => (
                       <tr key={index}>
                         <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-6">{candidate.name}</td>
                         <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">{candidate.party}</td>
@@ -240,7 +214,7 @@ export function ElectionInfoCard() {
 
             {viewMode === 'chart' && (
               <div className="mt-4 space-y-3">
-                {candidates.map((candidate, index) => (
+                {electionData.candidates.map((candidate, index) => (
                   <div className="flex items-center" key={index}>
                     <div 
                       className="w-4 h-4 rounded-full mr-2" 
