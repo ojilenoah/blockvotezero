@@ -20,8 +20,17 @@ export function ElectionInfoCard() {
     queryKey: ['activeElection'],
     queryFn: async () => {
       try {
+        // Get current election ID
+        const currentId = await getActiveElectionId();
+        console.log("[ElectionInfoCard] Current election ID:", currentId);
+
+        if (!currentId) {
+          console.log("[ElectionInfoCard] No election ID found");
+          return null;
+        }
+
         // Get election info
-        const electionInfo = await getElectionInfo(1); // Start checking from ID 1
+        const electionInfo = await getElectionInfo(currentId);
         console.log("[ElectionInfoCard] Election info:", electionInfo);
 
         if (!electionInfo?.name) {
@@ -30,10 +39,10 @@ export function ElectionInfoCard() {
         }
 
         // Get candidates and votes
-        const candidates = await getAllCandidates(1);
+        const candidates = await getAllCandidates(currentId);
         console.log("[ElectionInfoCard] Candidates:", candidates);
 
-        const totalVotes = await getTotalVotes(1);
+        const totalVotes = await getTotalVotes(currentId);
         console.log("[ElectionInfoCard] Total votes:", totalVotes);
 
         // Calculate if election is active based on time
@@ -50,9 +59,8 @@ export function ElectionInfoCard() {
           contractActive: electionInfo.active
         });
 
-        // Return election data regardless of active status
         return {
-          id: 1,
+          id: currentId,
           name: electionInfo.name,
           startTime,
           endTime,
