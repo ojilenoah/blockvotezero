@@ -35,53 +35,42 @@ export const getActiveElectionId = async (): Promise<number> => {
   const contract = getReadOnlyContract();
 
   try {
-    console.log("Getting active election ID...");
+    console.log("Getting current election ID...");
     const currentId = await contract.currentElectionId();
     console.log("Current election ID:", currentId.toString());
 
-    if (currentId > 0) {
+    // Start from the most recent election and work backwards
+    const maxElections = Math.min(Number(currentId), 5); // Check last 5 elections at most
+
+    for (let id = Number(currentId); id > Number(currentId) - maxElections; id--) {
+      if (id <= 0) break;
+
       try {
-        const info = await contract.electionInfo(currentId);
-        console.log("Raw election info:", info);
+        console.log(`Checking election ${id}...`);
+        const info = await contract.getElectionInfo(id);
 
-        if (info && info.exists) {
-          const now = Math.floor(Date.now() / 1000);
-          const startTime = Number(info.startTime);
-          const endTime = Number(info.endTime);
+        if (!info || !info.exists) {
+          console.log(`Election ${id} does not exist, continuing...`);
+          continue;
+        }
 
-          console.log("Checking election times:", {
-            now,
-            startTime,
-            endTime,
-            active: now >= startTime && now <= endTime
-          });
+        const now = Math.floor(Date.now() / 1000);
+        const startTime = Number(info.startTime);
+        const endTime = Number(info.endTime);
 
-          if (now >= startTime && now <= endTime) {
-            console.log(`Found active election: ${currentId}`);
-            return Number(currentId);
-          }
+        console.log(`Election ${id} times:`, {
+          now,
+          startTime,
+          endTime,
+          isActive: now >= startTime && now <= endTime
+        });
+
+        if (now >= startTime && now <= endTime) {
+          console.log(`Found active election: ${id}`);
+          return id;
         }
       } catch (error) {
-        console.error("Error checking current election:", error);
-      }
-
-      // If current election is not active, check recent ones
-      for (let id = Number(currentId); id > Math.max(1, Number(currentId) - 5); id--) {
-        try {
-          const info = await contract.electionInfo(id);
-          if (!info || !info.exists) continue;
-
-          const now = Math.floor(Date.now() / 1000);
-          const startTime = Number(info.startTime);
-          const endTime = Number(info.endTime);
-
-          if (now >= startTime && now <= endTime) {
-            console.log(`Found active election: ${id}`);
-            return id;
-          }
-        } catch (error) {
-          console.error(`Error checking election ${id}:`, error);
-        }
+        console.error(`Error checking election ${id}:`, error);
       }
     }
 
@@ -95,11 +84,16 @@ export const getActiveElectionId = async (): Promise<number> => {
 
 // Get election info
 export const getElectionInfo = async (electionId: number): Promise<ElectionInfo | null> => {
+  if (electionId <= 0) {
+    console.log("Invalid election ID", electionId);
+    return null;
+  }
+
   const contract = getReadOnlyContract();
 
   try {
     console.log(`Getting election info for ID ${electionId}`);
-    const info = await contract.electionInfo(electionId);
+    const info = await contract.getElectionInfo(electionId);
     console.log("Raw election info response:", info);
 
     if (!info || !info.exists) {
@@ -139,6 +133,11 @@ export const getElectionInfo = async (electionId: number): Promise<ElectionInfo 
 
 // Get all candidates for an election
 export const getAllCandidates = async (electionId: number): Promise<Candidate[]> => {
+  if (electionId <= 0) {
+    console.log("Invalid election ID for getting candidates", electionId);
+    return [];
+  }
+
   const contract = getReadOnlyContract();
 
   try {
