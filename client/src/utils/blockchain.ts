@@ -361,12 +361,25 @@ export const createElection = async (
       candidateParties,
     });
 
+    // Add additional gas to the transaction to ensure it goes through
+    const gasEstimate = await contract.createElection.estimateGas(
+      name,
+      startTimeUnix,
+      endTimeUnix,
+      candidateNames,
+      candidateParties
+    );
+
+    const gasLimit = Math.floor(gasEstimate * 1.2); // Add 20% buffer
+    console.log("Estimated gas limit:", gasLimit);
+
     const tx = await contract.createElection(
       name,
       startTimeUnix,
       endTimeUnix,
       candidateNames,
       candidateParties,
+      { gasLimit }
     );
 
     console.log("Transaction sent:", tx.hash);
