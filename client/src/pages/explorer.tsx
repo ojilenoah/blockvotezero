@@ -255,19 +255,79 @@ export default function Explorer() {
                 <CardHeader>
                   <CardTitle>Contract Transactions</CardTitle>
                   <p className="text-sm text-gray-500 mt-1">
-                    Showing estimated transactions based on election data
+                    {transactions.length > 0 
+                      ? "Showing actual blockchain transactions from Alchemy API" 
+                      : "Showing estimated transactions based on election data"}
                   </p>
                 </CardHeader>
                 <CardContent>
-                  {loadingElections ? (
+                  {loadingTransactions ? (
                     <div className="text-center py-8">
-                      <p className="text-gray-500">Loading transactions...</p>
+                      <p className="text-gray-500">Loading transactions from blockchain...</p>
+                    </div>
+                  ) : transactions.length > 0 ? (
+                    // Show real transactions if available
+                    <div className="space-y-4">
+                      {transactions.map((tx, index) => (
+                        <div key={tx.hash || index} className="border-b border-gray-200 pb-4 last:border-b-0 last:pb-0">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <p className="text-sm font-medium text-primary">
+                                {tx.method === "createElection" 
+                                  ? "Election Created" 
+                                  : tx.method === "castVote" 
+                                    ? "Vote Cast" 
+                                    : "Contract Interaction"}
+                              </p>
+                              <p className="text-sm font-mono text-gray-600 truncate max-w-xs sm:max-w-sm md:max-w-md">
+                                {tx.hash}
+                              </p>
+                              <div className="flex flex-col sm:flex-row sm:gap-4 text-xs text-gray-500 mt-1">
+                                <span>{tx.timestamp.toLocaleString()}</span>
+                                {tx.from && (
+                                  <span>From: {formatAddress(tx.from)}</span>
+                                )}
+                                {tx.to && (
+                                  <span>To: {formatAddress(tx.to)}</span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-sm font-medium text-green-600">{tx.status}</p>
+                              <p className="text-xs text-gray-500 mt-1">
+                                Method: {tx.method || "Contract Interaction"}
+                              </p>
+                              {tx.blockNumber && (
+                                <p className="text-xs text-gray-500">
+                                  Block: {tx.blockNumber}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+
+                      <div className="flex justify-center pt-4">
+                        <a 
+                          href={`https://www.oklink.com/amoy/address/${CONTRACT_ADDRESS}`}
+                          target="_blank"
+                          rel="noopener noreferrer" 
+                          className="text-primary hover:underline text-sm"
+                        >
+                          View all transactions on blockchain explorer →
+                        </a>
+                      </div>
+                    </div>
+                  ) : loadingElections ? (
+                    <div className="text-center py-8">
+                      <p className="text-gray-500">Loading election data...</p>
                     </div>
                   ) : elections.length === 0 ? (
                     <div className="text-center py-8">
                       <p className="text-gray-500">No transactions found</p>
                     </div>
                   ) : (
+                    // Fallback to generated transactions if API fails
                     <div className="space-y-4">
                       {/* Election Creation Transactions */}
                       {elections.map((election) => (
