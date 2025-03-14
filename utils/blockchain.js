@@ -1,7 +1,7 @@
 // src/utils/blockchain.js
 
 import { ethers } from 'ethers';
-import VotingSystemABI from '../contracts/VotingSystem.json'; // This will be the ABI from the compiled contract
+import VotingSystemABI from '../contracts/VotingSystem.json';
 
 // Contract address from deployment (update with your actual deployed proxy address)
 const CONTRACT_ADDRESS = '0xc0895D39fBBD1918067d5Fa41beDAF51d36665B5';
@@ -17,14 +17,14 @@ const getProvider = () => {
 // Initialize contract instance for read-only operations
 const getReadOnlyContract = () => {
   const provider = getProvider();
-  return new ethers.Contract(CONTRACT_ADDRESS, VotingSystemABI, provider);
+  return new ethers.Contract(CONTRACT_ADDRESS, VotingSystemABI.abi, provider);
 };
 
 // Initialize contract instance with signer for write operations
 const getSignedContract = (privateKey) => {
   const provider = getProvider();
   const wallet = new ethers.Wallet(privateKey, provider);
-  return new ethers.Contract(CONTRACT_ADDRESS, VotingSystemABI, wallet);
+  return new ethers.Contract(CONTRACT_ADDRESS, VotingSystemABI.abi, wallet);
 };
 
 // Admin Operations
@@ -57,7 +57,7 @@ export const createElection = async (
   candidateParties
 ) => {
   const contract = getSignedContract(privateKey);
-  
+
   try {
     const tx = await contract.createElection(
       name,
@@ -66,7 +66,7 @@ export const createElection = async (
       candidateNames,
       candidateParties
     );
-    
+
     const receipt = await tx.wait();
     return { success: true, transactionHash: receipt.transactionHash };
   } catch (error) {
@@ -78,7 +78,7 @@ export const createElection = async (
 // Change admin
 export const changeAdmin = async (privateKey, newAdminAddress) => {
   const contract = getSignedContract(privateKey);
-  
+
   try {
     const tx = await contract.changeAdmin(newAdminAddress);
     const receipt = await tx.wait();
@@ -98,16 +98,16 @@ export const castVote = async (electionId, candidateIndex, voterNINHash) => {
   if (!window.ethereum) {
     return { success: false, error: "MetaMask is not installed!" };
   }
-  
+
   try {
     await window.ethereum.request({ method: 'eth_requestAccounts' });
     const provider = new ethers.providers.Web3Provider(window.ethereum);
     const signer = provider.getSigner();
-    const contract = new ethers.Contract(CONTRACT_ADDRESS, VotingSystemABI, signer);
-    
+    const contract = new ethers.Contract(CONTRACT_ADDRESS, VotingSystemABI.abi, signer);
+
     const tx = await contract.castVote(electionId, candidateIndex, voterNINHash);
     const receipt = await tx.wait();
-    
+
     return { success: true, transactionHash: receipt.transactionHash };
   } catch (error) {
     console.error("Error casting vote:", error);
@@ -118,7 +118,7 @@ export const castVote = async (electionId, candidateIndex, voterNINHash) => {
 // Check if voter has already voted
 export const hasVoted = async (electionId, voterNINHash) => {
   const contract = getReadOnlyContract();
-  
+
   try {
     const voted = await contract.checkVoterStatus(electionId, voterNINHash);
     return voted;
@@ -133,7 +133,7 @@ export const hasVoted = async (electionId, voterNINHash) => {
 // Get active election ID
 export const getActiveElectionId = async () => {
   const contract = getReadOnlyContract();
-  
+
   try {
     const activeElectionId = await contract.getActiveElectionId();
     return activeElectionId.toNumber();
@@ -146,16 +146,18 @@ export const getActiveElectionId = async () => {
 // Get election info
 export const getElectionInfo = async (electionId) => {
   const contract = getReadOnlyContract();
-  
+
   try {
+    // Fixed: Using the correct contract method name 'getElectionInfo' instead of 'electionInfo'
     const info = await contract.getElectionInfo(electionId);
-    
+
     return {
       name: info.name,
-      startTime: new Date(info.startTime.toNumber() * 1000),
-      endTime: new Date(info.endTime.toNumber() * 1000),
+      startTime: new Date(info.startTime.toNumber() * 1000), // Convert from Unix timestamp
+      endTime: new Date(info.endTime.toNumber() * 1000),     // Convert from Unix timestamp
       active: info.active,
-      candidateCount: info.candidateCount.toNumber()
+      candidateCount: info.candidateCount.toNumber(),
+      upcoming: new Date() < new Date(info.startTime.toNumber() * 1000)
     };
   } catch (error) {
     console.error(`Error getting election info for ID ${electionId}:`, error);
@@ -166,10 +168,10 @@ export const getElectionInfo = async (electionId) => {
 // Get candidate info
 export const getCandidate = async (electionId, candidateIndex) => {
   const contract = getReadOnlyContract();
-  
+
   try {
     const info = await contract.getCandidate(electionId, candidateIndex);
-    
+
     return {
       name: info.name,
       party: info.party,
@@ -184,10 +186,10 @@ export const getCandidate = async (electionId, candidateIndex) => {
 // Get all candidates for an election
 export const getAllCandidates = async (electionId) => {
   const contract = getReadOnlyContract();
-  
+
   try {
     const result = await contract.getAllCandidates(electionId);
-    
+
     const candidates = [];
     for (let i = 0; i < result.names.length; i++) {
       candidates.push({
@@ -197,7 +199,7 @@ export const getAllCandidates = async (electionId) => {
         index: i
       });
     }
-    
+
     return candidates;
   } catch (error) {
     console.error(`Error getting all candidates for election ${electionId}:`, error);
@@ -208,7 +210,7 @@ export const getAllCandidates = async (electionId) => {
 // Get total votes in an election
 export const getTotalVotes = async (electionId) => {
   const contract = getReadOnlyContract();
-  
+
   try {
     const total = await contract.getTotalVotes(electionId);
     return total.toNumber();

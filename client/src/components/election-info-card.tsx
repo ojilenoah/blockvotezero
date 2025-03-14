@@ -31,7 +31,8 @@ export function ElectionInfoCard() {
         const activeElectionId = await getActiveElectionId();
         console.log("Active election ID:", activeElectionId);
 
-        if (activeElectionId > 0) {
+        // Changed condition to check if activeElectionId exists
+        if (activeElectionId !== null && activeElectionId !== undefined) {
           // Get election info
           const electionInfo = await getElectionInfo(activeElectionId);
           console.log("Election info:", electionInfo);
@@ -40,15 +41,15 @@ export function ElectionInfoCard() {
             setElectionData({
               id: activeElectionId,
               title: electionInfo.name,
-              dateRange: `${electionInfo.startTime.toLocaleDateString()} - ${electionInfo.endTime.toLocaleDateString()}`,
-              schedule: `Voting ${electionInfo.upcoming ? 'starts' : 'closes'} at ${electionInfo.upcoming ? electionInfo.startTime.toLocaleTimeString() : electionInfo.endTime.toLocaleTimeString()}`,
+              dateRange: `${new Date(electionInfo.startTime).toLocaleDateString()} - ${new Date(electionInfo.endTime).toLocaleDateString()}`,
+              schedule: `Voting ${electionInfo.upcoming ? 'starts' : 'closes'} at ${electionInfo.upcoming ? new Date(electionInfo.startTime).toLocaleTimeString() : new Date(electionInfo.endTime).toLocaleTimeString()}`,
               description: electionInfo.upcoming
                 ? "This election is scheduled to start soon. Be ready to cast your vote!"
                 : "Your vote matters. Participate in this election to make your voice heard.",
               isActive: electionInfo.active,
               isUpcoming: electionInfo.upcoming,
-              startTime: electionInfo.startTime,
-              endTime: electionInfo.endTime
+              startTime: new Date(electionInfo.startTime),
+              endTime: new Date(electionInfo.endTime)
             });
 
             // Get candidates if election has started (active or ended)
@@ -68,11 +69,11 @@ export function ElectionInfoCard() {
                 setCandidates(candidatesWithPercentages);
               }
             }
-          } else {
-            setElectionData(null);
           }
         } else {
+          // Set election data to null when no active election
           setElectionData(null);
+          setCandidates([]);
         }
       } catch (error: any) {
         console.error("Error fetching election data:", error);
@@ -88,6 +89,7 @@ export function ElectionInfoCard() {
     };
 
     fetchElectionData();
+    // Polling interval for real-time updates
     const interval = setInterval(fetchElectionData, 30000);
     return () => clearInterval(interval);
   }, [toast]);
