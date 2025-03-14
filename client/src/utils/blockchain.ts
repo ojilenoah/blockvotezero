@@ -187,7 +187,13 @@ export const castVote = async (
     const signer = await provider.getSigner();
     const contract = new ethers.Contract(CONTRACT_ADDRESS, VotingSystemABI.abi, signer);
 
-    const tx = await contract.castVote(electionId, candidateIndex, voterNINHash);
+    // Generate a unique voter ID by combining election ID and NIN hash
+    const uniqueVoterHash = ethers.solidityPackedKeccak256(
+      ['uint256', 'bytes32'],
+      [electionId, voterNINHash]
+    );
+
+    const tx = await contract.castVote(electionId, candidateIndex, uniqueVoterHash);
     const receipt = await tx.wait();
 
     // After successful vote, open the transaction in OKLink explorer
@@ -249,11 +255,12 @@ export const getContractTransactions = async (
 
     // Get latest block
     const latestBlock = await provider.getBlockNumber();
-    console.log("Latest block:", latestBlock);
 
-    // Calculate the starting block
+    // Calculate the starting block - if not provided, start from latest
     const currentStartBlock = startBlock || latestBlock;
-    const endBlock = Math.max(0, currentStartBlock - 100); // Look back 100 blocks at a time
+
+    // Look back 1000 blocks at a time for more comprehensive history
+    const endBlock = Math.max(0, currentStartBlock - 1000);
 
     console.log(`Searching blocks from ${currentStartBlock} to ${endBlock}`);
 
@@ -274,29 +281,35 @@ export const getContractTransactions = async (
             transaction.from?.toLowerCase() === CONTRACT_ADDRESS.toLowerCase()
           ) {
             const receipt = await provider.getTransactionReceipt(transaction.hash);
-            if (!receipt || !block) continue;
+            if (!receipt) continue;
 
             // Try to decode the transaction input data
             let method = "Contract Interaction";
             const methodId = transaction.data.slice(0, 10).toLowerCase();
-            if (methodId === "0x9112c1eb") {
-              method = "createElection";
-            } else if (methodId === "0x0121b93f") {
-              method = "castVote";
-            }
+
+            // Map common method IDs to human-readable names
+            const methodMap: { [key: string]: string } = {
+              "0x9112c1eb": "createElection",
+              "0x0121b93f": "castVote",
+              "0xa3ec138d": "changeAdmin"
+            };
+
+            method = methodMap[methodId] || method;
 
             const transactionInfo: Transaction = {
               hash: transaction.hash,
               timestamp: new Date(Number(block.timestamp) * 1000),
-              from: transaction.from,
+              from: transaction.from || "",
               to: transaction.to || "",
               method,
               value: transaction.value.toString(),
-              blockNumber: Number(block.blockNumber),
-              status: receipt.status === 1 ? "Confirmed" : "Failed",
+              blockNumber: Number(block.number),
+              status: receipt.status === 1 ? "Confirmed" : "Failed"
             };
 
             transactions.push(transactionInfo);
+
+            if (transactions.length >= pageSize) break;
           }
         }
       } catch (blockError) {
@@ -305,12 +318,15 @@ export const getContractTransactions = async (
       }
     }
 
+    // Sort transactions by timestamp (newest first)
+    transactions.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+
     // Determine if there are more transactions to load
     const hasMore = endBlock > 0;
     const nextBlock = hasMore ? endBlock - 1 : undefined;
 
     return {
-      transactions: transactions.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()),
+      transactions,
       hasMore,
       nextBlock
     };
