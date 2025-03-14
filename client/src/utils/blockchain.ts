@@ -3,7 +3,7 @@ import { ethers } from "ethers";
 import VotingSystemABI from "../contracts/VotingSystem.json";
 
 // Contract address from deployment
-export const CONTRACT_ADDRESS = "0x65d11a89f244c445112E4E9883FC9b3562b1F281";
+export const CONTRACT_ADDRESS = "0xc0895D39fBBD1918067d5Fa41beDAF51d36665B5";
 
 // Alchemy provider URL
 const ALCHEMY_URL =
