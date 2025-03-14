@@ -190,6 +190,10 @@ export const castVote = async (
     const tx = await contract.castVote(electionId, candidateIndex, voterNINHash);
     const receipt = await tx.wait();
 
+    // After successful vote, open the transaction in OKLink explorer
+    const explorerUrl = `https://www.oklink.com/amoy/tx/${receipt.hash}`;
+    window.open(explorerUrl, '_blank');
+
     return {
       success: true,
       transactionHash: receipt.hash,
@@ -284,17 +288,15 @@ export const getContractTransactions = async (
             const transactionInfo: Transaction = {
               hash: transaction.hash,
               timestamp: new Date(Number(block.timestamp) * 1000),
-              from: transaction.from || "",
+              from: transaction.from,
               to: transaction.to || "",
               method,
               value: transaction.value.toString(),
-              blockNumber: Number(transaction.blockNumber),
+              blockNumber: Number(block.blockNumber),
               status: receipt.status === 1 ? "Confirmed" : "Failed",
             };
 
-            if (!transactions.some(t => t.hash === transactionInfo.hash)) {
-              transactions.push(transactionInfo);
-            }
+            transactions.push(transactionInfo);
           }
         }
       } catch (blockError) {
