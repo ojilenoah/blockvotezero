@@ -7,7 +7,7 @@ import { Candidate } from "../types/candidate";
 export const CONTRACT_ADDRESS = "0xc0895D39fBBD1918067d5Fa41beDAF51d36665B5";
 
 // Alchemy provider URL
-const ALCHEMY_URL =
+export const ALCHEMY_URL =
   "https://polygon-amoy.g.alchemy.com/v2/E822ZzOp7UFQy6Zt82uF4hzcdklL-qoe";
 
 // Types for blockchain interactions
@@ -16,6 +16,7 @@ interface ElectionInfo {
   startTime: Date;
   endTime: Date;
   active: boolean;
+  upcoming: boolean; // New field to track upcoming elections
   candidateCount: number;
 }
 
@@ -378,7 +379,8 @@ export const getElectionInfo = async (electionId: number): Promise<ElectionInfo 
     const endTime = Number(info.endTime);
     const now = Math.floor(Date.now() / 1000);
     const active = now >= startTime && now <= endTime;
-    const candidateCount = Number(info.candidateCount); // Convert to number safely
+    const upcoming = now < startTime; // Election hasn't started yet
+    const candidateCount = Number(info.candidateCount);
 
     console.log("Processed election data:", {
       name: info.name,
@@ -386,6 +388,7 @@ export const getElectionInfo = async (electionId: number): Promise<ElectionInfo 
       endTime,
       now,
       active,
+      upcoming,
       candidateCount,
     });
 
@@ -393,8 +396,9 @@ export const getElectionInfo = async (electionId: number): Promise<ElectionInfo 
       name: info.name,
       startTime: new Date(startTime * 1000),
       endTime: new Date(endTime * 1000),
-      active: active,
-      candidateCount: candidateCount,
+      active,
+      upcoming,
+      candidateCount,
     };
 
     console.log("Final election info object:", electionInfo);
@@ -407,7 +411,6 @@ export const getElectionInfo = async (electionId: number): Promise<ElectionInfo 
     return electionInfo;
   } catch (error) {
     console.error(`Error getting election info for ID ${electionId}:`, error);
-
     try {
       const cachedInfo = localStorage.getItem(`election_${electionId}_info`);
       if (cachedInfo) {
@@ -416,8 +419,35 @@ export const getElectionInfo = async (electionId: number): Promise<ElectionInfo 
     } catch (cacheError) {
       console.error("Error accessing localStorage:", cacheError);
     }
-
     return null;
+  }
+};
+
+// Check if there's any active or upcoming election
+export const hasActiveOrUpcomingElection = async (): Promise<boolean> => {
+  const contract = getReadOnlyContract();
+
+  try {
+    const currentId = await contract.currentElectionId();
+    console.log("Current election ID:", currentId.toString());
+
+    // Check recent elections (current and past 5)
+    for (let id = Number(currentId); id >= Math.max(1, Number(currentId) - 5); id--) {
+      try {
+        const electionInfo = await getElectionInfo(id);
+        if (electionInfo && (electionInfo.active || electionInfo.upcoming)) {
+          console.log(`Found active/upcoming election: ${id}`);
+          return true;
+        }
+      } catch (error) {
+        console.error(`Error checking election ${id}:`, error);
+      }
+    }
+
+    return false;
+  } catch (error) {
+    console.error("Error checking for active/upcoming elections:", error);
+    return false;
   }
 };
 
