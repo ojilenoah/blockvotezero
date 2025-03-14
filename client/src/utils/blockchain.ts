@@ -38,6 +38,7 @@ export const getActiveElectionId = async (): Promise<number> => {
     const currentId = await contract.currentElectionId();
     console.log("Current election ID:", currentId.toString());
 
+    // Check from newest to oldest
     for (let id = Number(currentId); id > 0; id--) {
       try {
         const info = await contract.getElectionInfo(id);
@@ -159,16 +160,6 @@ export const getAllCandidates = async (electionId: number): Promise<Candidate[]>
   }
 };
 
-// Helper function to generate SHA-256 hash of NIN
-export const hashNIN = async (nin: string): Promise<string> => {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(nin);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = "0x" + hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
-  return hashHex;
-};
-
 // Get completed elections
 export const getCompletedElections = async (): Promise<number[]> => {
   const contract = getReadOnlyContract();
@@ -196,6 +187,16 @@ export const getCompletedElections = async (): Promise<number[]> => {
   }
 };
 
+// Helper function to generate SHA-256 hash of NIN
+export const hashNIN = async (nin: string): Promise<string> => {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(nin);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hashHex = "0x" + hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+  return hashHex;
+};
+
 // Admin Operations
 export const isAdmin = async (address: string): Promise<boolean> => {
   try {
@@ -211,6 +212,87 @@ export const isAdmin = async (address: string): Promise<boolean> => {
     return false;
   }
 };
+
+// Get transactions for our contract
+export const getContractTransactions = async (): Promise<Transaction[]> => {
+  try {
+    const provider = getProvider();
+    const transactions: Transaction[] = [];
+
+    // Check recent transactions
+    const latestBlock = await provider.getBlockNumber();
+    console.log("Latest block:", latestBlock);
+
+    const searchRange = 1000; // Look back this many blocks
+    const startBlock = Math.max(0, latestBlock - searchRange);
+
+    console.log(`Searching blocks from ${startBlock} to ${latestBlock}`);
+
+    // For each recent block, check transactions
+    for (let i = latestBlock; i >= startBlock && transactions.length < 20; i -= 100) {
+      try {
+        const block = await provider.getBlock(i, true);
+        if (!block || !block.transactions) continue;
+
+        // Filter transactions involving our contract
+        console.log(`Checking block ${i} transactions...`);
+        for (const tx of block.transactions) {
+          if (tx.to?.toLowerCase() === CONTRACT_ADDRESS.toLowerCase() ||
+              tx.from?.toLowerCase() === CONTRACT_ADDRESS.toLowerCase()) {
+            console.log(`Found contract transaction in block ${i}:`, tx.hash);
+
+            const receipt = await provider.getTransactionReceipt(tx.hash);
+            if (!receipt || !block) continue;
+
+            // Try to decode the transaction input data
+            let method = "Contract Interaction";
+            if (tx.data) {
+              const methodId = tx.data.slice(0, 10).toLowerCase();
+              // These are the first 4 bytes of the keccak256 hash of the function signatures
+              if (methodId === "0x9112c1eb") {
+                method = "createElection";
+              } else if (methodId === "0x0121b93f") {
+                method = "castVote";
+              }
+            }
+
+            const transaction: Transaction = {
+              hash: tx.hash,
+              timestamp: new Date(block.timestamp * 1000),
+              from: tx.from,
+              to: tx.to || "",
+              method,
+              blockNumber: tx.blockNumber || 0,
+              status: receipt.status === 1 ? "Confirmed" : "Failed",
+            };
+
+            if (!transactions.some(t => t.hash === transaction.hash)) {
+              transactions.push(transaction);
+            }
+          }
+        }
+      } catch (blockError) {
+        console.error(`Error processing block ${i}:`, blockError);
+        continue;
+      }
+    }
+
+    return transactions;
+  } catch (error) {
+    console.error("Error fetching contract transactions:", error);
+    return [];
+  }
+};
+
+export interface Transaction {
+  hash: string;
+  timestamp: Date;
+  from: string;
+  to: string;
+  method: string;
+  blockNumber: number;
+  status: string;
+}
 
 export interface Election {
   exists: boolean;
