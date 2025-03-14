@@ -5,22 +5,25 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { AdminNavbar } from "../../components/admin-navbar";
-import { AdminElectionCreator } from "../../components/admin-election-creator";
-import { AdminManagement } from "../../components/admin-management";
-import { mockElectionData } from "../../data/mock-data";
+import { AdminNavbar } from "@/components/admin-navbar";
+import { AdminElectionCreator } from "@/components/admin-election-creator";
+import { AdminManagement } from "@/components/admin-management";
+import { BlockchainTest } from "@/components/blockchain-test";
+import { getActiveElectionId, getElectionInfo } from "@/utils/blockchain";
 
 export default function AdminDashboard() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [adminAddress, setAdminAddress] = useState<string>("");
-  
+  const [activeElections, setActiveElections] = useState<number>(0);
+  const [isElectionActive, setIsElectionActive] = useState<boolean>(false);
+
   useEffect(() => {
     // Check if user is authenticated as admin
     const isAdmin = sessionStorage.getItem("isAdmin") === "true";
     const storedAddress = sessionStorage.getItem("adminAddress");
-    
+
     if (!isAdmin || !storedAddress) {
       toast({
         title: "Authentication required",
@@ -30,11 +33,27 @@ export default function AdminDashboard() {
       setLocation("/admin/login");
       return;
     }
-    
+
     setIsAuthenticated(true);
     setAdminAddress(storedAddress);
+
+    // Fetch active election data
+    const fetchElectionData = async () => {
+      try {
+        const activeElectionId = await getActiveElectionId();
+        if (activeElectionId > 0) {
+          const electionInfo = await getElectionInfo(activeElectionId);
+          setIsElectionActive(electionInfo?.active || false);
+          setActiveElections(electionInfo?.active ? 1 : 0);
+        }
+      } catch (error) {
+        console.error("Error fetching election data:", error);
+      }
+    };
+
+    fetchElectionData();
   }, [setLocation, toast]);
-  
+
   const handleLogout = () => {
     sessionStorage.removeItem("isAdmin");
     sessionStorage.removeItem("adminAddress");
@@ -45,15 +64,15 @@ export default function AdminDashboard() {
     });
     setLocation("/admin/login");
   };
-  
+
   if (!isAuthenticated) {
     return <div className="p-8 text-center">Authenticating...</div>;
   }
-  
+
   return (
     <div className="min-h-screen flex flex-col">
       <AdminNavbar address={adminAddress} onLogout={handleLogout} />
-      
+
       <main className="flex-grow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="flex justify-between items-center mb-6">
@@ -69,40 +88,41 @@ export default function AdminDashboard() {
               <Button variant="outline" onClick={handleLogout}>Logout</Button>
             </div>
           </div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle>Active Elections</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold">{mockElectionData.currentElection.isActive ? "1" : "0"}</div>
+                <div className="text-3xl font-bold">{activeElections}</div>
               </CardContent>
             </Card>
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle>Total Elections</CardTitle>
+                <CardTitle>Contract Status</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold">27</div>
+                <div className="text-sm text-green-600">Connected</div>
               </CardContent>
             </Card>
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle>Registered Voters</CardTitle>
+                <CardTitle>Network</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold">187,245</div>
+                <div className="text-sm">Polygon Mumbai Testnet</div>
               </CardContent>
             </Card>
           </div>
-          
+
           <Tabs defaultValue="create">
             <TabsList className="mb-6">
               <TabsTrigger value="create">Create Election</TabsTrigger>
               <TabsTrigger value="manage">Manage Admin</TabsTrigger>
+              <TabsTrigger value="test">Blockchain Test</TabsTrigger>
             </TabsList>
-            
+
             <TabsContent value="create">
               <Card>
                 <CardHeader>
@@ -112,11 +132,11 @@ export default function AdminDashboard() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <AdminElectionCreator isElectionActive={mockElectionData.currentElection.isActive} />
+                  <AdminElectionCreator isElectionActive={isElectionActive} />
                 </CardContent>
               </Card>
             </TabsContent>
-            
+
             <TabsContent value="manage">
               <Card>
                 <CardHeader>
@@ -130,10 +150,14 @@ export default function AdminDashboard() {
                 </CardContent>
               </Card>
             </TabsContent>
+
+            <TabsContent value="test">
+              <BlockchainTest />
+            </TabsContent>
           </Tabs>
         </div>
       </main>
-      
+
       <footer className="border-t border-gray-200 mt-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex flex-col items-center justify-between md:flex-row">
