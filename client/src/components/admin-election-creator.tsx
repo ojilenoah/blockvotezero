@@ -87,20 +87,22 @@ export function AdminElectionCreator({ isElectionActive }: AdminElectionCreatorP
   };
 
   const onSubmit = async (data: ElectionFormValues) => {
-    // Validate candidates
-    if (candidates.some(c => !c.name || !c.party)) {
+    const adminAddress = sessionStorage.getItem("adminAddress");
+    
+    if (!adminAddress) {
       toast({
         title: "Error",
-        description: "All candidate names and parties must be filled",
+        description: "Admin session expired. Please login again.",
         variant: "destructive",
       });
       return;
     }
 
-    if (!account) {
+    // Validate candidates
+    if (candidates.some(c => !c.name || !c.party)) {
       toast({
         title: "Error",
-        description: "Please connect your wallet first",
+        description: "All candidate names and parties must be filled",
         variant: "destructive",
       });
       return;
