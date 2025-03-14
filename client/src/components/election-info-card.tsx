@@ -22,12 +22,29 @@ export function ElectionInfoCard() {
         setLoading(true);
         setError(null);
         
-        const activeElectionId = await getActiveElectionId();
+        console.log("Fetching election data for info card");
+        
+        // First try to get active election ID from blockchain
+        let activeElectionId = await getActiveElectionId();
+        
+        // For testing: if we can't get one from the blockchain, check localStorage
+        if (!activeElectionId) {
+          console.log("No active election found from blockchain, checking localStorage");
+          const testId = localStorage.getItem("testing_election_id");
+          if (testId) {
+            activeElectionId = parseInt(testId);
+            console.log("Using testing election ID from localStorage:", activeElectionId);
+          }
+        }
         
         if (activeElectionId > 0) {
+          console.log(`Found active election with ID: ${activeElectionId}`);
+          
+          // Get election info
           const electionInfo = await getElectionInfo(activeElectionId);
           
           if (electionInfo && electionInfo.name) {
+            console.log("Election info loaded:", electionInfo);
             const startTime = new Date(electionInfo.startTime);
             const endTime = new Date(electionInfo.endTime);
             
@@ -42,22 +59,63 @@ export function ElectionInfoCard() {
               endTime
             });
 
+            console.log("Fetching candidates for election:", activeElectionId);
             const candidateList = await getAllCandidates(activeElectionId);
-            const totalVotes = candidateList.reduce((sum, c) => sum + (c.votes || 0), 0);
+            
+            if (candidateList && candidateList.length > 0) {
+              console.log(`Successfully loaded ${candidateList.length} candidates:`, candidateList);
+              
+              const totalVotes = candidateList.reduce((sum, c) => sum + (c.votes || 0), 0);
+              console.log("Total votes:", totalVotes);
 
-            // Calculate percentages
-            const candidatesWithPercentages = candidateList.map(candidate => ({
-              name: candidate.name,
-              party: candidate.party,
-              votes: candidate.votes,
-              percentage: totalVotes > 0 ? Math.round((candidate.votes / totalVotes) * 100) : 0
-            }));
+              // Calculate percentages
+              const candidatesWithPercentages = candidateList.map(candidate => ({
+                name: candidate.name,
+                party: candidate.party,
+                votes: candidate.votes || 0,
+                percentage: totalVotes > 0 ? Math.round(((candidate.votes || 0) / totalVotes) * 100) : 0
+              }));
 
-            setCandidates(candidatesWithPercentages);
+              setCandidates(candidatesWithPercentages);
+              console.log("Candidates with percentages:", candidatesWithPercentages);
+            } else {
+              console.error("No candidates found for election:", activeElectionId);
+              // Try to get from localStorage if we have no candidates from blockchain
+              try {
+                const cachedCandidates = localStorage.getItem(`election_${activeElectionId}_candidates`);
+                if (cachedCandidates) {
+                  const parsedCandidates = JSON.parse(cachedCandidates);
+                  console.log(`Using ${parsedCandidates.length} cached candidates from localStorage`);
+                  
+                  // Calculate votes and percentages
+                  const totalVotes = parsedCandidates.reduce((sum, c) => sum + (c.votes || 0), 0);
+                  const candidatesWithPercentages = parsedCandidates.map(candidate => ({
+                    name: candidate.name,
+                    party: candidate.party,
+                    votes: candidate.votes || 0,
+                    percentage: totalVotes > 0 ? Math.round(((candidate.votes || 0) / totalVotes) * 100) : 0
+                  }));
+                  
+                  setCandidates(candidatesWithPercentages);
+                } else {
+                  setCandidates([]);
+                  toast({
+                    title: "Warning",
+                    description: "No candidates found for this election",
+                    variant: "destructive"
+                  });
+                }
+              } catch (cacheError) {
+                console.error("Error retrieving cached candidates:", cacheError);
+                setCandidates([]);
+              }
+            }
           } else {
+            console.log("No valid election info found");
             setElectionData(null);
           }
         } else {
+          console.log("No active election found");
           setElectionData(null);
         }
       } catch (error: any) {
