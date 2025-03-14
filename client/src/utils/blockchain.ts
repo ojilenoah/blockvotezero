@@ -63,13 +63,13 @@ export const createElection = async (
 
   try {
     await window.ethereum.request({ method: 'eth_requestAccounts' });
-    const provider = new ethers.Web3Provider(window.ethereum as any);
+    const provider = new ethers.BrowserProvider(window.ethereum);
     const signer = await provider.getSigner();
     const contract = new ethers.Contract(CONTRACT_ADDRESS, VotingSystemABI.abi, signer);
 
-    // Convert dates to Unix timestamps as ethers.BigNumber
-    const startTimeUnix = ethers.BigNumber.from(Math.floor(startTime.getTime() / 1000));
-    const endTimeUnix = ethers.BigNumber.from(Math.floor(endTime.getTime() / 1000));
+    // Convert dates to Unix timestamps
+    const startTimeUnix = BigInt(Math.floor(startTime.getTime() / 1000));
+    const endTimeUnix = BigInt(Math.floor(endTime.getTime() / 1000));
 
     try {
       const tx = await contract.createElection(
@@ -81,14 +81,9 @@ export const createElection = async (
       );
 
       const receipt = await tx.wait();
-
-      if (!receipt.status) {
-        throw new Error("Transaction failed");
-      }
-
       return { 
         success: true, 
-        transactionHash: receipt.transactionHash,
+        transactionHash: receipt.hash,
         from: receipt.from,
         to: receipt.to,
         blockNumber: receipt.blockNumber
@@ -182,7 +177,7 @@ export const castVote = async (
 
   try {
     await window.ethereum.request({ method: 'eth_requestAccounts' });
-    const provider = new ethers.Web3Provider(window.ethereum as any);
+    const provider = new ethers.BrowserProvider(window.ethereum);
     const signer = await provider.getSigner();
     const contract = new ethers.Contract(CONTRACT_ADDRESS, VotingSystemABI.abi, signer);
 
@@ -191,7 +186,7 @@ export const castVote = async (
 
     return {
       success: true,
-      transactionHash: receipt.transactionHash,
+      transactionHash: receipt.hash,
       electionId,
       from: receipt.from,
       to: receipt.to,
@@ -263,7 +258,7 @@ export const getContractTransactions = async (): Promise<Transaction[]> => {
           // Ensure the transaction has the required properties
           if (!tx.to || !tx.from || !tx.hash || !tx.data || !tx.value || !tx.blockNumber) continue;
 
-          const transaction = tx as ethers.TransactionResponse;
+          const transaction = tx as any;
 
           if (
             transaction.to.toLowerCase() === CONTRACT_ADDRESS.toLowerCase() ||
