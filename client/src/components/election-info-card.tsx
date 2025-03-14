@@ -5,45 +5,71 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { getActiveElectionId, getElectionInfo, getAllCandidates } from "@/utils/blockchain";
 import { candidateColors } from "@/data/mock-data";
 import { useToast } from "@/hooks/use-toast";
+import { NoActiveElection } from "@/components/no-active-election";
+import { Link } from "wouter";
 
 export function ElectionInfoCard() {
   const [viewMode, setViewMode] = useState<'chart' | 'table'>('chart');
   const [electionData, setElectionData] = useState<any>(null);
   const [candidates, setCandidates] = useState<any[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
     const fetchElectionData = async () => {
       try {
+        setLoading(true);
+        setError(null);
+        
         const activeElectionId = await getActiveElectionId();
+        
         if (activeElectionId > 0) {
           const electionInfo = await getElectionInfo(activeElectionId);
-          setElectionData({
-            title: electionInfo.name,
-            dateRange: `${new Date(electionInfo.startTime).toLocaleDateString()} - ${new Date(electionInfo.endTime).toLocaleDateString()}`,
-            schedule: `Voting closes at ${new Date(electionInfo.endTime).toLocaleTimeString()} UTC`,
-            description: "Vote for representatives to serve on the community council.",
-            isActive: electionInfo.active,
-          });
+          
+          if (electionInfo && electionInfo.name) {
+            const startTime = new Date(electionInfo.startTime);
+            const endTime = new Date(electionInfo.endTime);
+            
+            setElectionData({
+              id: activeElectionId,
+              title: electionInfo.name,
+              dateRange: `${startTime.toLocaleDateString()} - ${endTime.toLocaleDateString()}`,
+              schedule: `Voting closes at ${endTime.toLocaleTimeString()} UTC`,
+              description: "Your vote matters. Participate in this election to make your voice heard.",
+              isActive: electionInfo.active,
+              startTime,
+              endTime
+            });
 
-          const candidateList = await getAllCandidates(activeElectionId);
-          const totalVotes = candidateList.reduce((sum, c) => sum + (c.votes || 0), 0);
+            const candidateList = await getAllCandidates(activeElectionId);
+            const totalVotes = candidateList.reduce((sum, c) => sum + (c.votes || 0), 0);
 
-          // Calculate percentages
-          const candidatesWithPercentages = candidateList.map(candidate => ({
-            name: candidate.name,
-            percentage: totalVotes > 0 ? Math.round((candidate.votes / totalVotes) * 100) : 0
-          }));
+            // Calculate percentages
+            const candidatesWithPercentages = candidateList.map(candidate => ({
+              name: candidate.name,
+              party: candidate.party,
+              votes: candidate.votes,
+              percentage: totalVotes > 0 ? Math.round((candidate.votes / totalVotes) * 100) : 0
+            }));
 
-          setCandidates(candidatesWithPercentages);
+            setCandidates(candidatesWithPercentages);
+          } else {
+            setElectionData(null);
+          }
+        } else {
+          setElectionData(null);
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error fetching election data:", error);
+        setError(error?.message || "Failed to load election data");
         toast({
           title: "Error",
           description: "Failed to load election data",
           variant: "destructive"
         });
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -54,9 +80,42 @@ export function ElectionInfoCard() {
     return () => clearInterval(interval);
   }, [toast]);
 
-  if (!electionData) {
-    return null;
+  if (loading) {
+    return (
+      <Card className="bg-white shadow-md rounded-lg p-6 mb-8">
+        <div className="flex justify-center items-center h-48">
+          <p className="text-gray-500">Loading election data...</p>
+        </div>
+      </Card>
+    );
   }
+
+  if (error) {
+    return (
+      <Card className="bg-white shadow-md rounded-lg p-6 mb-8">
+        <div className="flex justify-center items-center h-48 flex-col">
+          <p className="text-red-500 mb-2">Error loading election data</p>
+          <p className="text-gray-500 text-sm">{error}</p>
+        </div>
+      </Card>
+    );
+  }
+
+  if (!electionData) {
+    return (
+      <Card className="bg-white shadow-md rounded-lg p-6 mb-8">
+        <NoActiveElection 
+          title="No Active Election"
+          description="There is currently no active election. Check back later or contact the administrator."
+        />
+      </Card>
+    );
+  }
+
+  const isElectionActive = electionData.isActive;
+  const now = new Date();
+  const hasElectionStarted = now >= electionData.startTime;
+  const hasElectionEnded = now > electionData.endTime;
 
   return (
     <Card className="bg-white shadow-md rounded-lg p-6 mb-8">
@@ -83,9 +142,18 @@ export function ElectionInfoCard() {
             {electionData.description}
           </p>
 
-          <Button className="mt-2">
-            Cast Your Vote
-          </Button>
+          <Link href="/vote">
+            <Button 
+              className="mt-2"
+              disabled={!isElectionActive || hasElectionEnded || !hasElectionStarted}
+            >
+              {!hasElectionStarted 
+                ? "Election hasn't started yet"
+                : hasElectionEnded 
+                  ? "Election has ended" 
+                  : "Cast Your Vote"}
+            </Button>
+          </Link>
         </div>
         <div className="flex-1 lg:border-l lg:pl-6">
           <div className="flex items-center justify-between mb-4">
@@ -108,7 +176,11 @@ export function ElectionInfoCard() {
             </div>
           </div>
 
-          {viewMode === 'chart' && candidates.length > 0 && (
+          {candidates.length === 0 ? (
+            <div className="flex justify-center items-center h-64">
+              <p className="text-gray-500">No candidates available</p>
+            </div>
+          ) : viewMode === 'chart' ? (
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -136,33 +208,56 @@ export function ElectionInfoCard() {
                 </PieChart>
               </ResponsiveContainer>
             </div>
+          ) : (
+            <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 sm:rounded-lg mb-4">
+              <table className="min-w-full divide-y divide-gray-300">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th scope="col" className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6">Candidate</th>
+                    <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Party</th>
+                    <th scope="col" className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">Votes</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 bg-white">
+                  {candidates.map((candidate, index) => (
+                    <tr key={index}>
+                      <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-6">{candidate.name}</td>
+                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">{candidate.party}</td>
+                      <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-gray-500">{candidate.votes} ({candidate.percentage}%)</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
 
-          <div className="mt-4 space-y-3">
-            {candidates.map((candidate, index) => (
-              <div className="flex items-center" key={index}>
-                <div 
-                  className="w-4 h-4 rounded-full mr-2" 
-                  style={{ backgroundColor: candidateColors[index % candidateColors.length] }}
-                ></div>
-                <div className="flex-1">
-                  <div className="flex justify-between">
-                    <span className="text-sm font-medium text-gray-900">{candidate.name}</span>
-                    <span className="text-sm text-gray-500">{candidate.percentage}%</span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
-                    <div 
-                      className="h-1.5 rounded-full" 
-                      style={{ 
-                        width: `${candidate.percentage}%`,
-                        backgroundColor: candidateColors[index % candidateColors.length]
-                      }}
-                    ></div>
+          {viewMode === 'chart' && candidates.length > 0 && (
+            <div className="mt-4 space-y-3">
+              {candidates.map((candidate, index) => (
+                <div className="flex items-center" key={index}>
+                  <div 
+                    className="w-4 h-4 rounded-full mr-2" 
+                    style={{ backgroundColor: candidateColors[index % candidateColors.length] }}
+                  ></div>
+                  <div className="flex-1">
+                    <div className="flex justify-between">
+                      <span className="text-sm font-medium text-gray-900">{candidate.name}</span>
+                      <span className="text-sm text-gray-500">{candidate.percentage}%</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                      <div 
+                        className="h-1.5 rounded-full" 
+                        style={{ 
+                          width: `${candidate.percentage}%`,
+                          backgroundColor: candidateColors[index % candidateColors.length]
+                        }}
+                      ></div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </Card>
