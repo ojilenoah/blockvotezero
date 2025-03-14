@@ -2,7 +2,12 @@ import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
-import { getActiveElectionId, getElectionInfo, getAllCandidates } from "@/utils/blockchain";
+import {
+  getActiveElectionId,
+  getElectionInfo,
+  getAllCandidates,
+  getTotalVotes,
+} from "@/utils/blockchain";
 import { candidateColors } from "@/data/mock-data";
 import { useToast } from "@/hooks/use-toast";
 import { NoActiveElection } from "@/components/no-active-election";
@@ -22,63 +27,51 @@ export function ElectionInfoCard() {
         setLoading(true);
         setError(null);
 
-        console.log("Fetching election data for info card");
-
-        // Get active election ID from blockchain
+        // Get active election ID
         const activeElectionId = await getActiveElectionId();
         console.log("Active election ID:", activeElectionId);
 
         if (activeElectionId > 0) {
-          console.log(`Found active election with ID: ${activeElectionId}`);
-
           // Get election info
           const electionInfo = await getElectionInfo(activeElectionId);
-          console.log("Election info loaded:", electionInfo);
+          console.log("Fetched election info:", electionInfo);
 
-          if (electionInfo && (electionInfo.active || electionInfo.upcoming)) {
-            const startTime = new Date(electionInfo.startTime);
-            const endTime = new Date(electionInfo.endTime);
-
+          if (electionInfo) {
             setElectionData({
               id: activeElectionId,
               title: electionInfo.name,
-              dateRange: `${startTime.toLocaleDateString()} - ${endTime.toLocaleDateString()}`,
-              schedule: `Voting ${electionInfo.upcoming ? 'starts' : 'closes'} at ${electionInfo.upcoming ? startTime.toLocaleTimeString() : endTime.toLocaleTimeString()} UTC`,
-              description: electionInfo.upcoming 
+              dateRange: `${electionInfo.startTime.toLocaleDateString()} - ${electionInfo.endTime.toLocaleDateString()}`,
+              schedule: `Voting ${electionInfo.upcoming ? 'starts' : 'closes'} at ${electionInfo.upcoming ? electionInfo.startTime.toLocaleTimeString() : electionInfo.endTime.toLocaleTimeString()}`,
+              description: electionInfo.upcoming
                 ? "This election is scheduled to start soon. Be ready to cast your vote!"
                 : "Your vote matters. Participate in this election to make your voice heard.",
               isActive: electionInfo.active,
               isUpcoming: electionInfo.upcoming,
-              startTime,
-              endTime
+              startTime: electionInfo.startTime,
+              endTime: electionInfo.endTime
             });
 
-            // Get candidates if election is active
-            if (electionInfo.active) {
-              console.log("Fetching candidates for election:", activeElectionId);
+            // Get candidates if election is not upcoming
+            if (!electionInfo.upcoming) {
               const candidateList = await getAllCandidates(activeElectionId);
+              console.log("Candidates:", candidateList);
 
               if (candidateList && candidateList.length > 0) {
-                console.log(`Successfully loaded ${candidateList.length} candidates:`, candidateList);
-
-                const totalVotes = candidateList.reduce((sum, c) => sum + (c.votes || 0), 0);
-
+                const totalVotes = await getTotalVotes(activeElectionId);
                 const candidatesWithPercentages = candidateList.map(candidate => ({
                   name: candidate.name,
                   party: candidate.party,
                   votes: candidate.votes || 0,
-                  percentage: totalVotes > 0 ? Math.round(((candidate.votes || 0) / totalVotes) * 100) : 0
+                  percentage: totalVotes > 0 ? Math.round((candidate.votes / totalVotes) * 100) : 0
                 }));
 
                 setCandidates(candidatesWithPercentages);
               }
             }
           } else {
-            console.log("No active election found");
             setElectionData(null);
           }
         } else {
-          console.log("No active election ID found");
           setElectionData(null);
         }
       } catch (error: any) {
@@ -161,7 +154,7 @@ export function ElectionInfoCard() {
           <Link href="/vote">
             <Button 
               className="mt-2"
-              disabled={!electionData.isActive || electionData.isUpcoming}
+              disabled={!electionData.isActive}
             >
               {electionData.isUpcoming 
                 ? "Election starts soon"
@@ -172,7 +165,7 @@ export function ElectionInfoCard() {
           </Link>
         </div>
 
-        {electionData.isActive && candidates.length > 0 && (
+        {!electionData.isUpcoming && candidates.length > 0 && (
           <div className="flex-1 lg:border-l lg:pl-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-medium text-gray-900">Real-time Results</h3>
