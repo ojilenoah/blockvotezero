@@ -19,7 +19,6 @@ export function ElectionInfoCard() {
   const { data: electionData, isLoading } = useQuery({
     queryKey: ['activeElection'],
     queryFn: async () => {
-      console.log("Fetching election data for info card...");
       const activeElectionId = await getActiveElectionId();
       console.log("Active election ID:", activeElectionId);
 
@@ -31,8 +30,21 @@ export function ElectionInfoCard() {
       const electionInfo = await getElectionInfo(activeElectionId);
       console.log("Election info:", electionInfo);
 
-      if (!electionInfo) {
+      if (!electionInfo || !electionInfo.name) {
         console.log("No election info found");
+        return null;
+      }
+
+      // Check if election is currently active
+      const now = new Date();
+      const startTime = new Date(electionInfo.startTime);
+      const endTime = new Date(electionInfo.endTime);
+
+      const isActive = now >= startTime && now <= endTime;
+      console.log("Election active status:", { now, startTime, endTime, isActive });
+
+      if (!isActive) {
+        console.log("Election is not currently active");
         return null;
       }
 
@@ -42,13 +54,11 @@ export function ElectionInfoCard() {
       const totalVotes = await getTotalVotes(activeElectionId);
       console.log("Total votes:", totalVotes);
 
-      // Process and return the data
       return {
         id: activeElectionId,
         name: electionInfo.name,
-        startTime: electionInfo.startTime,
-        endTime: electionInfo.endTime,
-        active: electionInfo.active,
+        startTime,
+        endTime,
         candidates: candidates.map(candidate => ({
           ...candidate,
           percentage: totalVotes > 0 ? Math.round((candidate.votes / totalVotes) * 100) : 0
@@ -70,7 +80,7 @@ export function ElectionInfoCard() {
     );
   }
 
-  if (!electionData?.active) {
+  if (!electionData) {
     return (
       <Card className="p-6">
         <div className="text-center">
@@ -86,7 +96,7 @@ export function ElectionInfoCard() {
     );
   }
 
-  const timeRemaining = new Date(electionData.endTime).getTime() - Date.now();
+  const timeRemaining = electionData.endTime.getTime() - Date.now();
   const daysRemaining = Math.max(0, Math.floor(timeRemaining / (1000 * 60 * 60 * 24)));
   const hoursRemaining = Math.max(0, Math.floor((timeRemaining % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)));
 
@@ -101,7 +111,7 @@ export function ElectionInfoCard() {
             <div>
               <p className="text-sm text-gray-500">Election Period</p>
               <p className="font-medium">
-                {new Date(electionData.startTime).toLocaleDateString()} - {new Date(electionData.endTime).toLocaleDateString()}
+                {electionData.startTime.toLocaleDateString()} - {electionData.endTime.toLocaleDateString()}
               </p>
             </div>
 
