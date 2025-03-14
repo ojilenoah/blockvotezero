@@ -107,6 +107,8 @@ export function ElectionInfoCard() {
         <NoActiveElection 
           title="No Active Election"
           description="There is currently no active election. Check back later or contact the administrator."
+          showSchedule={true}
+          showButtons={true}
         />
       </Card>
     );

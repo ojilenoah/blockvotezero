@@ -87,6 +87,8 @@ export function PreviousElections() {
             <NoActiveElection
               title="No Previous Elections"
               description="There are no completed elections in the system yet."
+              showSchedule={false}
+              showButtons={false}
             />
           </div>
         </div>
