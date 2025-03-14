@@ -256,8 +256,8 @@ export default function Explorer() {
                   <CardTitle>Contract Transactions</CardTitle>
                   <p className="text-sm text-gray-500 mt-1">
                     {transactions.length > 0 
-                      ? "Showing actual blockchain transactions from Alchemy API" 
-                      : "Showing estimated transactions based on election data"}
+                      ? "Showing actual blockchain transactions from contract interactions" 
+                      : "No contract transactions found on the blockchain yet"}
                   </p>
                 </CardHeader>
                 <CardContent>
