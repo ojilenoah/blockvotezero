@@ -1,16 +1,17 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
 import { NinLoginForm } from "@/components/nin-login-form";
 import { LivenessCheck } from "@/components/liveness-check";
 import { UserInfoCard } from "@/components/user-info-card";
-import { CandidateGrid, Candidate } from "@/components/candidate-grid";
+import { CandidateGrid } from "@/components/candidate-grid";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { TransactionConfirmation } from "@/components/transaction-confirmation";
 import { NoActiveElection } from "@/components/no-active-election";
-import { mockElectionData } from "@/data/mock-data";
-import { useMetaMask } from "../hooks/use-metamask";
+import { useMetaMask } from "@/hooks/use-metamask";
+import { castVote, getActiveElectionId, getElectionInfo, getAllCandidates, hashNIN } from "@/utils/blockchain";
+import type { Candidate } from "@/types/candidate";
 
 enum VotingStep {
   NIN_ENTRY,
@@ -27,11 +28,41 @@ export default function Vote() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [transactionHash, setTransactionHash] = useState("");
   const [transactionTimestamp, setTransactionTimestamp] = useState("");
-  const { candidates, voterInfo } = mockElectionData;
-  const isElectionActive = mockElectionData.currentElection.isActive;
+  const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [isElectionActive, setIsElectionActive] = useState(false);
+  const [electionId, setElectionId] = useState<number>(0);
+  const [voterNIN, setVoterNIN] = useState<string>("");
 
   // Use MetaMask hook for wallet integration
   const { isConnected, connect, account } = useMetaMask();
+
+  // Fetch election data and candidates when component mounts
+  useEffect(() => {
+    const fetchElectionData = async () => {
+      try {
+        const activeElectionId = await getActiveElectionId();
+        if (activeElectionId > 0) {
+          setElectionId(activeElectionId);
+          const electionInfo = await getElectionInfo(activeElectionId);
+          setIsElectionActive(electionInfo?.active || false);
+
+          if (electionInfo?.active) {
+            const candidatesList = await getAllCandidates(activeElectionId);
+            setCandidates(candidatesList);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching election data:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load election data",
+          variant: "destructive"
+        });
+      }
+    };
+
+    fetchElectionData();
+  }, [toast]);
 
   const handleSelectCandidate = (candidate: Candidate) => {
     setSelectedCandidate(candidate);
@@ -50,23 +81,29 @@ export default function Vote() {
 
       // Only proceed if connection was successful
       if (isConnected && account) {
-        // Generate a transaction hash for demo purposes
-        const hash = "0x" + Array.from({ length: 64 }, () =>
-          Math.floor(Math.random() * 16).toString(16)
-        ).join("");
+        // Hash the voter's NIN for privacy
+        const voterNINHash = await hashNIN(voterNIN);
 
-        const timestamp = new Date().toLocaleString();
+        // Cast the vote on the blockchain
+        const result = await castVote(
+          electionId,
+          selectedCandidate.index,
+          voterNINHash
+        );
 
-        // Show confirmation after successful connection
-        setTransactionHash(hash);
-        setTransactionTimestamp(timestamp);
-        setHasVoted(true);
-        setCurrentStep(VotingStep.TRANSACTION_CONFIRMATION);
+        if (result.success) {
+          setTransactionHash(result.transactionHash);
+          setTransactionTimestamp(new Date().toLocaleString());
+          setHasVoted(true);
+          setCurrentStep(VotingStep.TRANSACTION_CONFIRMATION);
 
-        toast({
-          title: "Vote submitted",
-          description: "Your vote has been recorded on the blockchain"
-        });
+          toast({
+            title: "Vote submitted",
+            description: "Your vote has been recorded on the blockchain"
+          });
+        } else {
+          throw new Error(result.error);
+        }
       }
     } catch (error: any) {
       console.error("Vote casting error:", error);
@@ -99,7 +136,12 @@ export default function Vote() {
     switch (currentStep) {
       case VotingStep.NIN_ENTRY:
         return (
-          <NinLoginForm onComplete={() => setCurrentStep(VotingStep.LIVENESS_CHECK)} />
+          <NinLoginForm 
+            onComplete={(nin: string) => {
+              setVoterNIN(nin);
+              setCurrentStep(VotingStep.LIVENESS_CHECK);
+            }} 
+          />
         );
 
       case VotingStep.LIVENESS_CHECK:
@@ -110,7 +152,7 @@ export default function Vote() {
       case VotingStep.CANDIDATE_SELECTION:
         return (
           <div className="space-y-6 max-w-6xl mx-auto">
-            <UserInfoCard userInfo={voterInfo} />
+            <UserInfoCard userInfo={{ nin: voterNIN }} />
 
             <div className="mb-4">
               <h2 className="text-xl font-semibold text-gray-900 mb-2">Select a Candidate</h2>
@@ -120,7 +162,7 @@ export default function Vote() {
             <CandidateGrid
               candidates={candidates}
               onSelectCandidate={handleSelectCandidate}
-              selectedCandidateId={selectedCandidate?.id || null}
+              selectedCandidateId={selectedCandidate?.index || null}
             />
 
             {selectedCandidate && (
@@ -145,20 +187,6 @@ export default function Vote() {
                     </>
                   ) : (
                     <>
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-5 w-5 mr-2"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                        />
-                      </svg>
                       {isConnected ? "Cast Vote" : "Connect Wallet & Cast Vote"}
                     </>
                   )}

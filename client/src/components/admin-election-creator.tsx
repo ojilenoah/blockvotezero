@@ -10,6 +10,8 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { createElection } from "@/utils/blockchain";
+import { useMetaMask } from "@/hooks/use-metamask";
 
 interface AdminElectionCreatorProps {
   isElectionActive: boolean;
@@ -38,13 +40,14 @@ type ElectionFormValues = z.infer<typeof electionFormSchema>;
 
 export function AdminElectionCreator({ isElectionActive }: AdminElectionCreatorProps) {
   const { toast } = useToast();
+  const { account } = useMetaMask();
   const [candidates, setCandidates] = useState<Candidate[]>([
     { id: 1, name: "", party: "" },
     { id: 2, name: "", party: "" },
   ]);
   const [creationSuccess, setCreationSuccess] = useState(false);
   const [transactionHash, setTransactionHash] = useState("");
-  
+
   const form = useForm<ElectionFormValues>({
     resolver: zodResolver(electionFormSchema),
     defaultValues: {
@@ -53,15 +56,15 @@ export function AdminElectionCreator({ isElectionActive }: AdminElectionCreatorP
       endTime: "",
     },
   });
-  
+
   const handleAddCandidate = () => {
-    const newId = candidates.length > 0 
-      ? Math.max(...candidates.map(c => c.id)) + 1 
+    const newId = candidates.length > 0
+      ? Math.max(...candidates.map(c => c.id)) + 1
       : 1;
-      
+
     setCandidates([...candidates, { id: newId, name: "", party: "" }]);
   };
-  
+
   const handleRemoveCandidate = (id: number) => {
     if (candidates.length <= 2) {
       toast({
@@ -71,22 +74,22 @@ export function AdminElectionCreator({ isElectionActive }: AdminElectionCreatorP
       });
       return;
     }
-    
+
     setCandidates(candidates.filter(c => c.id !== id));
   };
-  
+
   const handleCandidateChange = (id: number, field: 'name' | 'party', value: string) => {
     setCandidates(
-      candidates.map(c => 
+      candidates.map(c =>
         c.id === id ? { ...c, [field]: value } : c
       )
     );
   };
-  
-  const onSubmit = (data: ElectionFormValues) => {
+
+  const onSubmit = async (data: ElectionFormValues) => {
     // Validate candidates
     const invalidCandidates = candidates.some(c => !c.name || !c.party);
-    
+
     if (invalidCandidates) {
       toast({
         title: "Invalid candidates",
@@ -95,28 +98,44 @@ export function AdminElectionCreator({ isElectionActive }: AdminElectionCreatorP
       });
       return;
     }
-    
-    // Simulate blockchain transaction
-    toast({
-      title: "Creating election",
-      description: "Connecting to blockchain via MetaMask...",
-    });
-    
-    setTimeout(() => {
-      const hash = "0x" + Array.from({ length: 64 }, () => 
-        Math.floor(Math.random() * 16).toString(16)
-      ).join("");
-      
-      setTransactionHash(hash);
-      setCreationSuccess(true);
-      
+
+    // Prepare data for blockchain
+    const candidateNames = candidates.map(c => c.name);
+    const candidateParties = candidates.map(c => c.party);
+    const startTime = new Date(data.startTime);
+    const endTime = new Date(data.endTime);
+
+    try {
+      const result = await createElection(
+        account!,
+        data.name,
+        startTime,
+        endTime,
+        candidateNames,
+        candidateParties
+      );
+
+      if (result.success) {
+        setTransactionHash(result.transactionHash);
+        setCreationSuccess(true);
+
+        toast({
+          title: "Election created",
+          description: "Successfully deployed to blockchain",
+        });
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error: any) {
+      console.error("Error creating election:", error);
       toast({
-        title: "Election created",
-        description: "Successfully deployed to blockchain",
+        title: "Error creating election",
+        description: error.message || "Failed to create election on blockchain",
+        variant: "destructive",
       });
-    }, 2000);
+    }
   };
-  
+
   if (creationSuccess) {
     return (
       <div className="space-y-6">
@@ -152,19 +171,19 @@ export function AdminElectionCreator({ isElectionActive }: AdminElectionCreatorP
       </div>
     );
   }
-  
+
   return (
     <div>
       {isElectionActive && (
         <Alert variant="destructive" className="mb-6">
           <AlertTitle>Active Election in Progress</AlertTitle>
           <AlertDescription>
-            You cannot create a new election while another one is active. 
+            You cannot create a new election while another one is active.
             Please wait for the current election to end.
           </AlertDescription>
         </Alert>
       )}
-      
+
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
           <div className="space-y-4">
@@ -181,7 +200,7 @@ export function AdminElectionCreator({ isElectionActive }: AdminElectionCreatorP
                 </FormItem>
               )}
             />
-            
+
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <FormField
                 control={form.control}
@@ -199,7 +218,7 @@ export function AdminElectionCreator({ isElectionActive }: AdminElectionCreatorP
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={form.control}
                 name="endTime"
@@ -218,9 +237,9 @@ export function AdminElectionCreator({ isElectionActive }: AdminElectionCreatorP
               />
             </div>
           </div>
-          
+
           <Separator className="my-6" />
-          
+
           <div>
             <h3 className="text-lg font-medium mb-4">Candidates</h3>
             <div className="space-y-4">
@@ -266,7 +285,7 @@ export function AdminElectionCreator({ isElectionActive }: AdminElectionCreatorP
                   </CardContent>
                 </Card>
               ))}
-              
+
               <Button
                 type="button"
                 variant="outline"
@@ -278,7 +297,7 @@ export function AdminElectionCreator({ isElectionActive }: AdminElectionCreatorP
               </Button>
             </div>
           </div>
-          
+
           <div className="flex justify-end">
             <Button type="submit" size="lg" disabled={isElectionActive}>
               Create Election
