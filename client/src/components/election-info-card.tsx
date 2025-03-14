@@ -20,32 +20,23 @@ export function ElectionInfoCard() {
     queryKey: ['activeElection'],
     queryFn: async () => {
       try {
-        // Get active election ID
-        const activeElectionId = await getActiveElectionId();
-        console.log("[ElectionInfoCard] Active election ID:", activeElectionId);
-
-        if (!activeElectionId) {
-          console.log("[ElectionInfoCard] No active election ID found");
-          return null;
-        }
-
         // Get election info
-        const electionInfo = await getElectionInfo(activeElectionId);
+        const electionInfo = await getElectionInfo(1); // Start checking from ID 1
         console.log("[ElectionInfoCard] Election info:", electionInfo);
 
-        if (!electionInfo?.name || !electionInfo.active) {
-          console.log("[ElectionInfoCard] No valid or active election info found");
+        if (!electionInfo?.name) {
+          console.log("[ElectionInfoCard] No valid election info found");
           return null;
         }
 
         // Get candidates and votes
-        const candidates = await getAllCandidates(activeElectionId);
+        const candidates = await getAllCandidates(1);
         console.log("[ElectionInfoCard] Candidates:", candidates);
 
-        const totalVotes = await getTotalVotes(activeElectionId);
+        const totalVotes = await getTotalVotes(1);
         console.log("[ElectionInfoCard] Total votes:", totalVotes);
 
-        // Calculate if election is active (same logic as explorer page)
+        // Calculate if election is active based on time
         const now = new Date();
         const startTime = new Date(electionInfo.startTime);
         const endTime = new Date(electionInfo.endTime);
@@ -59,14 +50,9 @@ export function ElectionInfoCard() {
           contractActive: electionInfo.active
         });
 
-        // Return all election data if both contract and time indicate active
-        if (!isActive) {
-          console.log("[ElectionInfoCard] Election is not within active time period");
-          return null;
-        }
-
+        // Return election data regardless of active status
         return {
-          id: activeElectionId,
+          id: 1,
           name: electionInfo.name,
           startTime,
           endTime,
