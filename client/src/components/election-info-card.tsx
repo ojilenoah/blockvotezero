@@ -19,15 +19,30 @@ export function ElectionInfoCard() {
   const { data: electionData, isLoading } = useQuery({
     queryKey: ['activeElection'],
     queryFn: async () => {
+      console.log("Fetching election data for info card...");
       const activeElectionId = await getActiveElectionId();
-      if (!activeElectionId) return null;
+      console.log("Active election ID:", activeElectionId);
+
+      if (!activeElectionId) {
+        console.log("No active election ID found");
+        return null;
+      }
 
       const electionInfo = await getElectionInfo(activeElectionId);
-      if (!electionInfo) return null;
+      console.log("Election info:", electionInfo);
 
+      if (!electionInfo) {
+        console.log("No election info found");
+        return null;
+      }
+
+      // Get candidates and votes
       const candidates = await getAllCandidates(activeElectionId);
+      console.log("Candidates:", candidates);
       const totalVotes = await getTotalVotes(activeElectionId);
+      console.log("Total votes:", totalVotes);
 
+      // Process and return the data
       return {
         id: activeElectionId,
         name: electionInfo.name,
@@ -55,7 +70,7 @@ export function ElectionInfoCard() {
     );
   }
 
-  if (!electionData) {
+  if (!electionData?.active) {
     return (
       <Card className="p-6">
         <div className="text-center">
