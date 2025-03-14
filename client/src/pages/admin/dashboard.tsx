@@ -20,7 +20,6 @@ export default function AdminDashboard() {
   const [isElectionActive, setIsElectionActive] = useState<boolean>(false);
 
   useEffect(() => {
-    // Check if user is authenticated as admin
     const isAdmin = sessionStorage.getItem("isAdmin") === "true";
     const storedAddress = sessionStorage.getItem("adminAddress");
 
@@ -37,7 +36,6 @@ export default function AdminDashboard() {
     setIsAuthenticated(true);
     setAdminAddress(storedAddress);
 
-    // Fetch active election data
     const fetchElectionData = async () => {
       try {
         const activeElectionId = await getActiveElectionId();
@@ -111,7 +109,7 @@ export default function AdminDashboard() {
                 <CardTitle>Network</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-sm">Polygon Mumbai Testnet</div>
+                <div className="text-sm">Polygon Amoy Testnet</div>
               </CardContent>
             </Card>
           </div>

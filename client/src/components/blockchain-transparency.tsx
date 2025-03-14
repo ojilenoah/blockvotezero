@@ -5,7 +5,7 @@ import { CONTRACT_ADDRESS } from "@/utils/blockchain";
 
 export function BlockchainTransparency() {
   const { chainId } = useMetaMask();
-  const [explorerBaseUrl, setExplorerBaseUrl] = useState("https://mumbai.polygonscan.com");
+  const [explorerBaseUrl, setExplorerBaseUrl] = useState("https://www.oklink.com/amoy");
 
   useEffect(() => {
     // Update explorer URL based on chain ID
@@ -15,12 +15,12 @@ export function BlockchainTransparency() {
         case "0x89": // Polygon Mainnet
           setExplorerBaseUrl("https://polygonscan.com");
           break;
-        case "0x13881": // Mumbai Testnet
-          setExplorerBaseUrl("https://mumbai.polygonscan.com");
+        case "0xe9": // Amoy Testnet
+          setExplorerBaseUrl("https://www.oklink.com/amoy");
           break;
         // Add other networks as needed
         default:
-          setExplorerBaseUrl("https://mumbai.polygonscan.com");
+          setExplorerBaseUrl("https://www.oklink.com/amoy");
       }
     }
   }, [chainId]);
@@ -44,7 +44,7 @@ export function BlockchainTransparency() {
                   <div className="w-20 text-xs font-medium text-gray-500">Network</div>
                   <div className="flex-1 text-xs text-gray-900">
                     {chainId ? (
-                      chainId === "0x13881" ? "Polygon Mumbai Testnet" : "Polygon Network"
+                      chainId === "0xe9" ? "Polygon Amoy Testnet" : "Polygon Network"
                     ) : (
                       "Unknown Network"
                     )}

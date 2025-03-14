@@ -28,8 +28,8 @@ export function AdminNavbar({ address, onLogout }: AdminNavbarProps) {
         return "Sepolia Testnet";
       case "0x89":
         return "Polygon";
-      case "0x13881":
-        return "Mumbai Testnet";
+      case "0xe9":
+        return "Amoy Testnet";
       case "0x539":
         return "Localhost 8545";
       default:

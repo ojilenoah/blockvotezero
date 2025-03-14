@@ -23,10 +23,10 @@ export function TransactionConfirmation({
   // Get the appropriate explorer URL based on the current network
   const getExplorerUrl = (hash: string) => {
     if (!chainId) return `https://etherscan.io/tx/${hash}`;
-    
+
     // Convert decimal to hex if needed
     const hexChainId = chainId.startsWith("0x") ? chainId : `0x${parseInt(chainId).toString(16)}`;
-    
+
     switch (hexChainId.toLowerCase()) {
       case "0x1": // Ethereum Mainnet
         return `https://etherscan.io/tx/${hash}`;
@@ -36,10 +36,10 @@ export function TransactionConfirmation({
         return `https://sepolia.etherscan.io/tx/${hash}`;
       case "0x89": // Polygon
         return `https://polygonscan.com/tx/${hash}`;
-      case "0x13881": // Mumbai Testnet
-        return `https://mumbai.polygonscan.com/tx/${hash}`;
+      case "0xe9": // Amoy Testnet
+        return `https://www.oklink.com/amoy/tx/${hash}`;
       default:
-        return `https://etherscan.io/tx/${hash}`; // Default to Ethereum mainnet
+        return `https://www.oklink.com/amoy/tx/${hash}`; // Default to Amoy testnet
     }
   };
 
