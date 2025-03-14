@@ -19,55 +19,70 @@ export function ElectionInfoCard() {
   const { data: electionData, isLoading } = useQuery({
     queryKey: ['activeElection'],
     queryFn: async () => {
-      const activeElectionId = await getActiveElectionId();
-      console.log("Active election ID:", activeElectionId);
+      try {
+        // Get active election ID
+        const activeElectionId = await getActiveElectionId();
+        console.log("[ElectionInfoCard] Active election ID:", activeElectionId);
 
-      if (!activeElectionId) {
-        console.log("No active election ID found");
+        if (!activeElectionId) {
+          console.log("[ElectionInfoCard] No active election ID found");
+          return null;
+        }
+
+        // Get election info
+        const electionInfo = await getElectionInfo(activeElectionId);
+        console.log("[ElectionInfoCard] Election info:", electionInfo);
+
+        if (!electionInfo?.name || !electionInfo.active) {
+          console.log("[ElectionInfoCard] No valid or active election info found");
+          return null;
+        }
+
+        // Get candidates and votes
+        const candidates = await getAllCandidates(activeElectionId);
+        console.log("[ElectionInfoCard] Candidates:", candidates);
+
+        const totalVotes = await getTotalVotes(activeElectionId);
+        console.log("[ElectionInfoCard] Total votes:", totalVotes);
+
+        // Calculate if election is active (same logic as explorer page)
+        const now = new Date();
+        const startTime = new Date(electionInfo.startTime);
+        const endTime = new Date(electionInfo.endTime);
+        const isActive = now >= startTime && now <= endTime;
+
+        console.log("[ElectionInfoCard] Time check:", {
+          now: now.toISOString(),
+          startTime: startTime.toISOString(),
+          endTime: endTime.toISOString(),
+          isActive,
+          contractActive: electionInfo.active
+        });
+
+        // Return all election data if both contract and time indicate active
+        if (!isActive) {
+          console.log("[ElectionInfoCard] Election is not within active time period");
+          return null;
+        }
+
+        return {
+          id: activeElectionId,
+          name: electionInfo.name,
+          startTime,
+          endTime,
+          candidates: candidates.map(candidate => ({
+            ...candidate,
+            percentage: totalVotes > 0 ? Math.round((candidate.votes / totalVotes) * 100) : 0
+          })),
+          totalVotes
+        };
+      } catch (error) {
+        console.error("[ElectionInfoCard] Error fetching election data:", error);
         return null;
       }
-
-      const electionInfo = await getElectionInfo(activeElectionId);
-      console.log("Election info:", electionInfo);
-
-      if (!electionInfo || !electionInfo.name) {
-        console.log("No election info found");
-        return null;
-      }
-
-      // Check if election is currently active
-      const now = new Date();
-      const startTime = new Date(electionInfo.startTime);
-      const endTime = new Date(electionInfo.endTime);
-
-      const isActive = now >= startTime && now <= endTime;
-      console.log("Election active status:", { now, startTime, endTime, isActive });
-
-      if (!isActive) {
-        console.log("Election is not currently active");
-        return null;
-      }
-
-      // Get candidates and votes
-      const candidates = await getAllCandidates(activeElectionId);
-      console.log("Candidates:", candidates);
-      const totalVotes = await getTotalVotes(activeElectionId);
-      console.log("Total votes:", totalVotes);
-
-      return {
-        id: activeElectionId,
-        name: electionInfo.name,
-        startTime,
-        endTime,
-        candidates: candidates.map(candidate => ({
-          ...candidate,
-          percentage: totalVotes > 0 ? Math.round((candidate.votes / totalVotes) * 100) : 0
-        })),
-        totalVotes
-      };
     },
-    staleTime: 30000, // Consider data fresh for 30 seconds
-    refetchInterval: 60000, // Only refetch every minute
+    staleTime: 30000,
+    refetchInterval: 60000
   });
 
   if (isLoading) {
