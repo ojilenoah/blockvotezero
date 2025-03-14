@@ -40,16 +40,68 @@ export default function Vote() {
   useEffect(() => {
     const fetchElectionData = async () => {
       try {
-        const activeElectionId = await getActiveElectionId();
-        if (activeElectionId > 0) {
-          setElectionId(activeElectionId);
-          const electionInfo = await getElectionInfo(activeElectionId);
-          setIsElectionActive(electionInfo?.active || false);
-
-          if (electionInfo?.active) {
-            const candidatesList = await getAllCandidates(activeElectionId);
-            setCandidates(candidatesList);
+        console.log("Fetching election data for voting page");
+        
+        // First try to get active election ID from blockchain
+        let activeElectionId = await getActiveElectionId();
+        
+        // For testing: if we can't get one from the blockchain, check localStorage
+        if (!activeElectionId) {
+          console.log("No active election found from blockchain, checking localStorage");
+          const testId = localStorage.getItem("testing_election_id");
+          if (testId) {
+            activeElectionId = parseInt(testId);
+            console.log("Using testing election ID from localStorage:", activeElectionId);
           }
+        }
+        
+        if (activeElectionId > 0) {
+          console.log(`Found active election with ID: ${activeElectionId}`);
+          setElectionId(activeElectionId);
+          
+          // Get election info
+          const electionInfo = await getElectionInfo(activeElectionId);
+          if (electionInfo) {
+            console.log("Election info:", electionInfo);
+            setIsElectionActive(electionInfo.active || false);
+            
+            if (electionInfo.active) {
+              console.log("Election is active, fetching candidates");
+              
+              // Try to get candidates from blockchain
+              const candidatesList = await getAllCandidates(activeElectionId);
+              
+              if (candidatesList && candidatesList.length > 0) {
+                console.log(`Found ${candidatesList.length} candidates:`, candidatesList);
+                setCandidates(candidatesList);
+                
+                // Save candidates to localStorage as backup
+                localStorage.setItem(`election_${activeElectionId}_candidates`, JSON.stringify(candidatesList));
+              } else {
+                // If we couldn't get candidates from blockchain, try localStorage
+                console.log("No candidates found from blockchain, checking localStorage");
+                const cachedCandidates = localStorage.getItem(`election_${activeElectionId}_candidates`);
+                if (cachedCandidates) {
+                  const parsedCandidates = JSON.parse(cachedCandidates);
+                  console.log(`Using ${parsedCandidates.length} cached candidates from localStorage`);
+                  setCandidates(parsedCandidates);
+                } else {
+                  console.error("No candidates found for election");
+                  toast({
+                    title: "Warning",
+                    description: "No candidates found for this election",
+                    variant: "destructive"
+                  });
+                }
+              }
+            } else {
+              console.log("Election is not active");
+            }
+          } else {
+            console.error("Failed to get election info");
+          }
+        } else {
+          console.log("No active election found");
         }
       } catch (error) {
         console.error("Error fetching election data:", error);
