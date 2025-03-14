@@ -20,56 +20,65 @@ export function ElectionInfoCard() {
     queryKey: ['activeElection'],
     queryFn: async () => {
       try {
-        // Get current election ID
-        const currentId = await getActiveElectionId();
-        console.log("[ElectionInfoCard] Current election ID:", currentId);
+        // Get current election ID (this will be the next ID to be used)
+        const nextId = await getActiveElectionId();
+        console.log("[ElectionInfoCard] Next election ID:", nextId);
 
-        if (!currentId) {
+        if (!nextId) {
           console.log("[ElectionInfoCard] No election ID found");
           return null;
         }
 
-        // Get election info
-        const electionInfo = await getElectionInfo(currentId);
-        console.log("[ElectionInfoCard] Election info:", electionInfo);
+        // Look backwards from current ID to find the most recent valid election
+        for (let id = nextId - 1; id >= 1; id--) {
+          try {
+            const electionInfo = await getElectionInfo(id);
+            console.log(`[ElectionInfoCard] Checking election ${id}:`, electionInfo);
 
-        if (!electionInfo?.name) {
-          console.log("[ElectionInfoCard] No valid election info found");
-          return null;
+            if (electionInfo?.name) {
+              // Found a valid election, get candidates and votes
+              const candidates = await getAllCandidates(id);
+              console.log("[ElectionInfoCard] Candidates:", candidates);
+
+              const totalVotes = await getTotalVotes(id);
+              console.log("[ElectionInfoCard] Total votes:", totalVotes);
+
+              // Calculate if election is active based on time
+              const now = new Date();
+              const startTime = new Date(electionInfo.startTime);
+              const endTime = new Date(electionInfo.endTime);
+              const isActive = now >= startTime && now <= endTime;
+
+              console.log("[ElectionInfoCard] Time check:", {
+                now: now.toISOString(),
+                startTime: startTime.toISOString(),
+                endTime: endTime.toISOString(),
+                isActive,
+                contractActive: electionInfo.active
+              });
+
+              // Only return if the election is active
+              if (isActive && electionInfo.active) {
+                return {
+                  id,
+                  name: electionInfo.name,
+                  startTime,
+                  endTime,
+                  candidates: candidates.map(candidate => ({
+                    ...candidate,
+                    percentage: totalVotes > 0 ? Math.round((candidate.votes / totalVotes) * 100) : 0
+                  })),
+                  totalVotes
+                };
+              }
+            }
+          } catch (error) {
+            console.error(`[ElectionInfoCard] Error checking election ${id}:`, error);
+            continue;
+          }
         }
 
-        // Get candidates and votes
-        const candidates = await getAllCandidates(currentId);
-        console.log("[ElectionInfoCard] Candidates:", candidates);
-
-        const totalVotes = await getTotalVotes(currentId);
-        console.log("[ElectionInfoCard] Total votes:", totalVotes);
-
-        // Calculate if election is active based on time
-        const now = new Date();
-        const startTime = new Date(electionInfo.startTime);
-        const endTime = new Date(electionInfo.endTime);
-        const isActive = now >= startTime && now <= endTime;
-
-        console.log("[ElectionInfoCard] Time check:", {
-          now: now.toISOString(),
-          startTime: startTime.toISOString(),
-          endTime: endTime.toISOString(),
-          isActive,
-          contractActive: electionInfo.active
-        });
-
-        return {
-          id: currentId,
-          name: electionInfo.name,
-          startTime,
-          endTime,
-          candidates: candidates.map(candidate => ({
-            ...candidate,
-            percentage: totalVotes > 0 ? Math.round((candidate.votes / totalVotes) * 100) : 0
-          })),
-          totalVotes
-        };
+        return null;
       } catch (error) {
         console.error("[ElectionInfoCard] Error fetching election data:", error);
         return null;
