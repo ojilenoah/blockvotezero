@@ -1,9 +1,8 @@
-// src/utils/blockchain.ts
 import { ethers } from "ethers";
 import VotingSystemABI from "../contracts/VotingSystem.json";
 import { Candidate } from "../types/candidate";
 
-// Contract address from deployment (update with your actual deployed contract address)
+// Contract address from deployment
 export const CONTRACT_ADDRESS = '0xc0895D39fBBD1918067d5Fa41beDAF51d36665B5';
 
 // Alchemy provider URL
@@ -50,6 +49,66 @@ const getReadOnlyContract = () => {
   return new ethers.Contract(CONTRACT_ADDRESS, VotingSystemABI.abi, provider);
 };
 
+// Create an election
+export const createElection = async (
+  name: string,
+  startTime: Date,
+  endTime: Date,
+  candidateNames: string[],
+  candidateParties: string[],
+): Promise<TransactionResult> => {
+  if (!window.ethereum) {
+    return { success: false, error: "MetaMask is not installed!" };
+  }
+
+  try {
+    await window.ethereum.request({ method: 'eth_requestAccounts' });
+    const provider = new ethers.Web3Provider(window.ethereum as any);
+    const signer = await provider.getSigner();
+    const contract = new ethers.Contract(CONTRACT_ADDRESS, VotingSystemABI.abi, signer);
+
+    // Convert dates to Unix timestamps as ethers.BigNumber
+    const startTimeUnix = ethers.BigNumber.from(Math.floor(startTime.getTime() / 1000));
+    const endTimeUnix = ethers.BigNumber.from(Math.floor(endTime.getTime() / 1000));
+
+    try {
+      const tx = await contract.createElection(
+        name,
+        startTimeUnix,
+        endTimeUnix,
+        candidateNames,
+        candidateParties
+      );
+
+      const receipt = await tx.wait();
+
+      if (!receipt.status) {
+        throw new Error("Transaction failed");
+      }
+
+      return { 
+        success: true, 
+        transactionHash: receipt.transactionHash,
+        from: receipt.from,
+        to: receipt.to,
+        blockNumber: receipt.blockNumber
+      };
+    } catch (error: any) {
+      console.error("Contract error:", error);
+      return { 
+        success: false, 
+        error: error.message || "Failed to create election" 
+      };
+    }
+  } catch (error: any) {
+    console.error("Election creation error:", error);
+    return { 
+      success: false, 
+      error: error.message || "Failed to connect to wallet" 
+    };
+  }
+};
+
 // Get active election ID
 export const getActiveElectionId = async (): Promise<number> => {
   const contract = getReadOnlyContract();
@@ -67,7 +126,6 @@ export const getElectionInfo = async (electionId: number): Promise<ElectionInfo 
   const contract = getReadOnlyContract();
   try {
     const info = await contract.getElectionInfo(electionId);
-    if (!info) return null;
 
     return {
       name: info.name,
@@ -87,6 +145,7 @@ export const getAllCandidates = async (electionId: number): Promise<Candidate[]>
   const contract = getReadOnlyContract();
   try {
     const result = await contract.getAllCandidates(electionId);
+
     return result.names.map((name: string, i: number) => ({
       name,
       party: result.parties[i],
@@ -122,8 +181,8 @@ export const castVote = async (
   }
 
   try {
-    await window.ethereum.request({ method: "eth_requestAccounts" });
-    const provider = new ethers.BrowserProvider(window.ethereum);
+    await window.ethereum.request({ method: 'eth_requestAccounts' });
+    const provider = new ethers.Web3Provider(window.ethereum as any);
     const signer = await provider.getSigner();
     const contract = new ethers.Contract(CONTRACT_ADDRESS, VotingSystemABI.abi, signer);
 
@@ -132,8 +191,8 @@ export const castVote = async (
 
     return {
       success: true,
-      transactionHash: receipt.hash,
-      electionId: electionId,
+      transactionHash: receipt.transactionHash,
+      electionId,
       from: receipt.from,
       to: receipt.to,
       blockNumber: receipt.blockNumber
@@ -141,185 +200,6 @@ export const castVote = async (
   } catch (error: any) {
     console.error("Error casting vote:", error);
     return { success: false, error: error.message };
-  }
-};
-
-// Create an election
-export const createElection = async (
-  name: string,
-  startTime: Date,
-  endTime: Date,
-  candidateNames: string[],
-  candidateParties: string[],
-): Promise<TransactionResult> => {
-  console.log("Starting election creation process...");
-
-  if (!window.ethereum) {
-    console.error("MetaMask not found");
-    return { success: false, error: "MetaMask is not installed!" };
-  }
-
-  try {
-    console.log("Requesting MetaMask account access...");
-    await window.ethereum.request({ method: "eth_requestAccounts" });
-    const provider = new ethers.BrowserProvider(window.ethereum);
-    const signer = await provider.getSigner();
-    const signerAddress = await signer.getAddress();
-    console.log("Connected with address:", signerAddress);
-
-    // Check admin status
-    console.log("Checking admin status for:", signerAddress);
-    const isAdminUser = await isAdmin(signerAddress);
-    console.log("Is admin?", isAdminUser);
-
-    if (!isAdminUser) {
-      console.error("Address is not admin:", signerAddress);
-      return {
-        success: false,
-        error: "Only the admin can create elections. Please connect with the admin wallet.",
-      };
-    }
-
-    const contract = new ethers.Contract(
-      CONTRACT_ADDRESS,
-      VotingSystemABI.abi,
-      signer,
-    );
-
-    // Input validation
-    if (!name || name.trim() === "") {
-      return { success: false, error: "Election name is required" };
-    }
-
-    if (candidateNames.length === 0 || candidateParties.length === 0) {
-      return { success: false, error: "At least one candidate is required" };
-    }
-
-    if (candidateNames.length !== candidateParties.length) {
-      return { success: false, error: "Candidate names and parties count mismatch" };
-    }
-
-    // Convert dates to Unix timestamps
-    const startTimeUnix = Math.floor(startTime.getTime() / 1000);
-    const endTimeUnix = Math.floor(endTime.getTime() / 1000);
-    const now = Math.floor(Date.now() / 1000);
-
-    console.log("Timestamps:", {
-      now,
-      startTimeUnix,
-      endTimeUnix,
-      startTime: startTime.toISOString(),
-      endTime: endTime.toISOString(),
-    });
-
-    if (startTimeUnix <= now) {
-      return { success: false, error: "Start time must be in the future" };
-    }
-
-    if (endTimeUnix <= startTimeUnix) {
-      return { success: false, error: "End time must be after start time" };
-    }
-
-    console.log("Creating election with params:", {
-      name,
-      startTimeUnix,
-      endTimeUnix,
-      candidateNames,
-      candidateParties,
-    });
-
-    // Important: Don't estimate gas or set gas limit, let MetaMask handle it
-    const tx = await contract.createElection(
-      name,
-      startTimeUnix,
-      endTimeUnix,
-      candidateNames,
-      candidateParties
-    );
-
-    console.log("Transaction sent:", tx.hash);
-    console.log("Waiting for transaction confirmation...");
-
-    const receipt = await tx.wait();
-    console.log("Transaction receipt:", receipt);
-
-    if (!receipt) {
-      throw new Error("Transaction failed - no receipt received");
-    }
-
-    const block = await provider.getBlock(receipt.blockNumber);
-    if (!block) {
-      throw new Error("Failed to get block details");
-    }
-
-    console.log("Block details:", block);
-
-    const txData: Transaction = {
-      hash: receipt.hash,
-      timestamp: new Date(block.timestamp * 1000),
-      from: receipt.from || "",
-      to: receipt.to || "",
-      method: "createElection",
-      value: "0",
-      blockNumber: receipt.blockNumber,
-      status: receipt.status === 1 ? "Confirmed" : "Failed",
-    };
-
-    localStorage.setItem("lastElectionCreationTx", JSON.stringify(txData));
-
-    // Get the election ID
-    const electionId = await contract.currentElectionId();
-    const electionIdNumber = Number(electionId);
-    console.log("New election created with ID:", electionIdNumber);
-
-    // Store candidate information
-    const candidateObjects = candidateNames.map((name, index) => ({
-      name,
-      party: candidateParties[index],
-      votes: 0,
-      index,
-    }));
-
-    localStorage.setItem(
-      `election_${electionIdNumber}_candidates`,
-      JSON.stringify(candidateObjects),
-    );
-
-    // Immediately fetch and cache the election info
-    const electionInfo = await getElectionInfo(electionIdNumber);
-    if (electionInfo) {
-      localStorage.setItem(
-        `election_${electionIdNumber}_info`,
-        JSON.stringify(electionInfo),
-      );
-    }
-
-    return {
-      success: true,
-      transactionHash: receipt.hash,
-      electionId: electionIdNumber,
-      from: receipt.from || "",
-      to: receipt.to || "",
-      blockNumber: receipt.blockNumber,
-    };
-  } catch (error: any) {
-    console.error("Error creating election:", error);
-
-    if (error.code === "ACTION_REJECTED") {
-      return { success: false, error: "Transaction was rejected in MetaMask" };
-    }
-
-    if (error.message.includes("execution reverted")) {
-      return {
-        success: false,
-        error: "Contract execution failed - make sure you have admin rights and check the parameters",
-      };
-    }
-
-    return {
-      success: false,
-      error: `Error creating election: ${error.message || "Unknown error"}`,
-    };
   }
 };
 
@@ -333,7 +213,7 @@ export const hashNIN = async (nin: string): Promise<string> => {
   return hashHex;
 };
 
-// Admin Operations
+// Check if address is admin
 export const isAdmin = async (address: string): Promise<boolean> => {
   try {
     const contract = getReadOnlyContract();
