@@ -151,7 +151,8 @@ export const createElection = async (
         // Also store the election's candidate information for caching purposes
         // This helps if the blockchain query for candidates has issues later
         const electionId = await contract.currentElectionId();
-        console.log("New election created with ID:", Number(electionId));
+        const electionIdNumber = Number(electionId);
+        console.log("New election created with ID:", electionIdNumber);
         
         // Generate candidate objects from the input arrays
         const candidateObjects = candidateNames.map((name, index) => ({
@@ -162,13 +163,24 @@ export const createElection = async (
         }));
         
         // Save candidates in local storage for backup/cache
-        localStorage.setItem(`election_${electionId}_candidates`, JSON.stringify(candidateObjects));
-        console.log(`Cached ${candidateObjects.length} candidates for election ${electionId}`);
+        localStorage.setItem(`election_${electionIdNumber}_candidates`, JSON.stringify(candidateObjects));
+        console.log(`Cached ${candidateObjects.length} candidates for election ${electionIdNumber}`);
+        
+        // Return the election ID with the success response
+        return { 
+          success: true, 
+          transactionHash: receipt.hash,
+          electionId: electionIdNumber,
+          from: receipt.from || "",
+          to: receipt.to || "",
+          blockNumber: receipt.blockNumber
+        };
       }
     } catch (e) {
       console.error("Error storing transaction data:", e);
     }
     
+    // If we get here, it means the transaction was successful but we couldn't get the electionId
     return { success: true, transactionHash: receipt.hash };
   } catch (error: any) {
     console.error("Error creating election:", error);
@@ -233,19 +245,10 @@ export const castVote = async (electionId: number, candidateIndex: number, voter
   }
 };
 
-// Create some sample candidates for testing purposes if none exist yet
-// This is a temporary solution until the contract interaction is fixed
-const ensureSampleCandidates = (electionId: number) => {
-  // Only add sample candidates if there's no cache present yet
-  if (!localStorage.getItem(`election_${electionId}_candidates`)) {
-    console.log(`Adding sample candidates for election ${electionId} to localStorage for testing`);
-    const sampleCandidates = [
-      { name: "Alex Johnson", party: "Progressive Party", votes: 12, index: 0 },
-      { name: "Sarah Williams", party: "Conservative Alliance", votes: 8, index: 1 },
-      { name: "Michael Lee", party: "Democratic Union", votes: 15, index: 2 }
-    ];
-    localStorage.setItem(`election_${electionId}_candidates`, JSON.stringify(sampleCandidates));
-  }
+// Check if candidates exist for an election
+const candidatesExistInCache = (electionId: number): boolean => {
+  const cached = localStorage.getItem(`election_${electionId}_candidates`);
+  return cached !== null;
 };
 
 // Get active election ID (using currentElectionId from contract and checking if it's active)
@@ -436,10 +439,56 @@ export const getAllCandidates = async (electionId: number) => {
     
     console.log(`Election ${electionId} exists with name: ${electionInfo.name}`);
     
-    // CRITICAL ISSUE: The contract does not have a "candidates" method or mapping that we can query
-    // This is a fundamental limitation of the contract design
+    // Try to get candidates from the VoteCast events
+    try {
+      console.log("Trying to get candidates from VoteCast events");
+      const provider = getProvider();
+      // Look for vote events to extract candidate information
+      const voteFilter = contract.filters.VoteCast(electionId);
+      const voteEvents = await contract.queryFilter(voteFilter);
+      
+      // Map to track the candidates we've seen
+      const candidatesMap = new Map();
+      
+      // Get candidates from events
+      for (const event of voteEvents) {
+        try {
+          // Extract candidate index from event
+          const candidateIndex = Number(event.args?.candidateIndex || 0);
+          
+          // If we haven't seen this candidate, add it to our map
+          if (!candidatesMap.has(candidateIndex)) {
+            // The contract doesn't provide candidate names via events, so we need to use the stored data
+            // when the election was created
+            candidatesMap.set(candidateIndex, {
+              name: `Candidate ${candidateIndex + 1}`,
+              party: "Unknown Party",
+              votes: 1,
+              index: candidateIndex
+            });
+          } else {
+            // Update vote count for this candidate
+            const candidate = candidatesMap.get(candidateIndex);
+            candidate.votes += 1;
+            candidatesMap.set(candidateIndex, candidate);
+          }
+        } catch (e) {
+          console.log("Error processing vote event:", e);
+        }
+      }
+      
+      console.log(`Found ${candidatesMap.size} candidates from events`);
+      
+      // If we have candidates from events, use them
+      if (candidatesMap.size > 0) {
+        const candidatesArray = Array.from(candidatesMap.values());
+        return candidatesArray;
+      }
+    } catch (e) {
+      console.log("Could not get candidates from events:", e);
+    }
     
-    // First check if we have cached candidates in localStorage (preferably from creation time)
+    // If we can't get from events, check localStorage cache
     console.log("Checking for candidates in localStorage cache");
     try {
       const cachedCandidates = localStorage.getItem(`election_${electionId}_candidates`);
@@ -454,19 +503,8 @@ export const getAllCandidates = async (electionId: number) => {
       console.log("Error accessing localStorage:", cacheError);
     }
     
-    // If we don't have cached candidates, create sample candidates for testing
-    console.log("Creating sample candidates for testing");
-    const sampleCandidates = [
-      { name: "Alex Johnson", party: "Progressive Party", votes: 12, index: 0 },
-      { name: "Sarah Williams", party: "Conservative Alliance", votes: 8, index: 1 },
-      { name: "Michael Lee", party: "Democratic Union", votes: 15, index: 2 }
-    ];
-    
-    // Store in localStorage for future use
-    localStorage.setItem(`election_${electionId}_candidates`, JSON.stringify(sampleCandidates));
-    console.log(`Stored ${sampleCandidates.length} sample candidates in localStorage`);
-    
-    return sampleCandidates;
+    console.log("Could not retrieve candidates. Please create an election with candidates first.");
+    return [];
   } catch (error) {
     console.error(
       `Error getting all candidates for election ${electionId}:`,

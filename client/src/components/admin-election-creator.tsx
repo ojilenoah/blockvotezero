@@ -116,6 +116,43 @@ export function AdminElectionCreator({ isElectionActive }: AdminElectionCreatorP
         setTransactionHash(result.transactionHash);
         setCreationSuccess(true);
 
+        // Store candidate data in localStorage for future retrieval
+        // This is necessary because the smart contract doesn't provide 
+        // a direct way to query candidate information after creation
+        if (result.electionId) {
+          const electionId = result.electionId;
+          console.log(`Storing candidates for election ${electionId} in localStorage`);
+          
+          // Format candidates with index and initial vote count
+          const candidatesWithMetadata = candidates.map((c, index) => ({
+            name: c.name,
+            party: c.party,
+            votes: 0,
+            index
+          }));
+          
+          localStorage.setItem(
+            `election_${electionId}_candidates`, 
+            JSON.stringify(candidatesWithMetadata)
+          );
+          
+          // Also store any transaction data
+          if (result.transactionHash) {
+            localStorage.setItem('lastElectionCreationTx', JSON.stringify({
+              hash: result.transactionHash,
+              timestamp: new Date(),
+              from: result.from || "",
+              to: result.to || "",
+              method: "createElection",
+              value: "0",
+              blockNumber: result.blockNumber || 0,
+              status: "Confirmed"
+            }));
+          }
+          
+          console.log(`Successfully stored ${candidatesWithMetadata.length} candidates for election ${electionId}`);
+        }
+
         toast({
           title: "Election created",
           description: "Successfully deployed to blockchain",
