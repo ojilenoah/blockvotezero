@@ -1,10 +1,17 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getStatusBadge } from "@/utils/ui-helpers";
 import { CONTRACT_ADDRESS } from "@/utils/blockchain";
-import type { Election } from "@/pages/explorer";
+import type { Election } from "@/utils/blockchain";
 
 interface AdminElectionLogProps {
-  elections: Election[];
+  elections: Array<{
+    id: number;
+    name: string;
+    startTime: string;
+    endTime: string;
+    status: "Active" | "Upcoming" | "Completed";
+    totalVotes: number;
+  }>;
   isLoading: boolean;
 }
 

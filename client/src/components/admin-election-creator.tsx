@@ -216,7 +216,7 @@ export function AdminElectionCreator({ isElectionActive, hasUpcomingElection, el
         <Alert variant="destructive" className="mb-6">
           <AlertTitle>Cannot Create New Election</AlertTitle>
           <AlertDescription>
-            {isElectionActive 
+            {isElectionActive
               ? "An election is currently active. Please wait for it to end before creating a new one."
               : "There is an upcoming election scheduled. Only one election can be scheduled at a time."}
           </AlertDescription>

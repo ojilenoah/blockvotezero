@@ -102,10 +102,11 @@ export default function Explorer() {
   });
 
   // Query for getting transaction data
-  const { data: transactions, isLoading: loadingTransactions } = useQuery({
-    queryKey: ['transactions'],
-    queryFn: async () => {
-      return await getContractTransactions();
+  const { data: transactions, isLoading: loadingTransactions, refetch } = useQuery({
+    queryKey: ['transactions', { startBlock: 0 }], //Added startBlock for pagination
+    queryFn: async ({ queryKey }) => {
+      const [, { startBlock }] = queryKey;
+      return await getContractTransactions(startBlock); //Pass startBlock to function
     },
     staleTime: 30000, // Consider data fresh for 30 seconds
     refetchInterval: 60000, // Only refetch every minute
@@ -196,53 +197,73 @@ export default function Explorer() {
                     <div className="text-center py-8">
                       <p className="text-gray-500">Loading transactions from blockchain...</p>
                     </div>
-                  ) : !transactions?.length ? (
+                  ) : !transactions?.transactions.length ? (
                     <div className="text-center py-8">
                       <p className="text-gray-500">No transactions found</p>
                     </div>
                   ) : (
-                    <div className="space-y-4">
-                      {transactions.map((tx) => (
-                        <div key={tx.hash} className="border-b border-gray-200 pb-4 last:border-b-0 last:pb-0">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <p className="text-sm font-medium text-primary">
-                                {tx.method}
-                              </p>
-                              <p className="text-sm font-mono text-gray-600 truncate max-w-xs sm:max-w-sm md:max-w-md">
-                                {tx.hash}
-                              </p>
-                              <div className="flex flex-col sm:flex-row sm:gap-4 text-xs text-gray-500 mt-1">
-                                <span>{tx.timestamp.toLocaleString()}</span>
-                                {tx.from && (
-                                  <span>From: {formatAddress(tx.from)}</span>
-                                )}
-                                {tx.to && (
-                                  <span>To: {formatAddress(tx.to)}</span>
-                                )}
+                    <>
+                      <div className="space-y-4">
+                        {transactions.transactions.map((tx) => (
+                          <div key={tx.hash} className="border-b border-gray-200 pb-4 last:border-b-0 last:pb-0">
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <p className="text-sm font-medium text-primary">
+                                  {tx.method}
+                                </p>
+                                <p className="text-sm font-mono text-gray-600 truncate max-w-xs sm:max-w-sm md:max-w-md">
+                                  {tx.hash}
+                                </p>
+                                <div className="flex flex-col sm:flex-row sm:gap-4 text-xs text-gray-500 mt-1">
+                                  <span>{tx.timestamp.toLocaleString()}</span>
+                                  {tx.from && (
+                                    <span>From: {formatAddress(tx.from)}</span>
+                                  )}
+                                  {tx.to && (
+                                    <span>To: {formatAddress(tx.to)}</span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-sm font-medium text-green-600">{tx.status}</p>
+                                <p className="text-xs text-gray-500">
+                                  Block: {tx.blockNumber}
+                                </p>
                               </div>
                             </div>
-                            <div className="text-right">
-                              <p className="text-sm font-medium text-green-600">{tx.status}</p>
-                              <p className="text-xs text-gray-500">
-                                Block: {tx.blockNumber}
-                              </p>
-                            </div>
                           </div>
+                        ))}
+                      </div>
+
+                      {transactions.hasMore && (
+                        <div className="flex justify-center mt-6">
+                          <Button
+                            variant="outline"
+                            onClick={() => {
+                              if (transactions.nextBlock) {
+                                // Refetch with the next block
+                                refetch({
+                                  queryKey: ['transactions', { startBlock: transactions.nextBlock }]
+                                });
+                              }
+                            }}
+                          >
+                            Load More Transactions
+                          </Button>
                         </div>
-                      ))}
+                      )}
 
                       <div className="flex justify-center pt-4">
-                        <a 
+                        <a
                           href={`https://www.oklink.com/amoy/address/${CONTRACT_ADDRESS}`}
                           target="_blank"
-                          rel="noopener noreferrer" 
+                          rel="noopener noreferrer"
                           className="text-primary hover:underline text-sm"
                         >
                           View all transactions on blockchain explorer →
                         </a>
                       </div>
-                    </div>
+                    </>
                   )}
                 </CardContent>
               </Card>

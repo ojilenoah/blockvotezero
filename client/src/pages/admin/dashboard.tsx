@@ -12,7 +12,6 @@ import { AdminElectionLog } from "@/components/admin-election-log";
 import { AdminManagement } from "@/components/admin-management";
 import { BlockchainTest } from "@/components/blockchain-test";
 import { getActiveElectionId, getElectionInfo, getAllCandidates, getTotalVotes } from "@/utils/blockchain";
-import type { Election } from "../explorer";
 
 export default function AdminDashboard() {
   const [, setLocation] = useLocation();
@@ -25,7 +24,7 @@ export default function AdminDashboard() {
     queryKey: ['admin-elections'],
     queryFn: async () => {
       const currentElectionId = await getActiveElectionId();
-      const electionList: Election[] = [];
+      const electionList = [];
       let totalVotesCount = 0;
       let activeCount = 0;
       let upcomingCount = 0;
@@ -149,6 +148,7 @@ export default function AdminDashboard() {
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle>Active Elections</CardTitle>
+                <CardDescription>Currently running elections</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold">{electionData?.statistics.activeElections || 0}</div>
@@ -157,6 +157,7 @@ export default function AdminDashboard() {
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle>Upcoming Elections</CardTitle>
+                <CardDescription>Scheduled for the future</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold">{electionData?.statistics.upcomingElections || 0}</div>
@@ -165,6 +166,7 @@ export default function AdminDashboard() {
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle>Total Votes</CardTitle>
+                <CardDescription>Across all elections</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold">{electionData?.statistics.totalVotes || 0}</div>
