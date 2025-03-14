@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { TransactionConfirmation } from "@/components/transaction-confirmation";
 import { NoActiveElection } from "@/components/no-active-election";
 import { useMetaMask } from "@/hooks/use-metamask";
-import { castVote, getActiveElectionId, getElectionInfo, getAllCandidates, hashNIN } from "@/utils/blockchain";
+import { castVote, getActiveElectionId, getElectionInfo, getAllCandidates, hashNIN, getTotalVotes } from "@/utils/blockchain";
 import type { Candidate } from "@/types/candidate";
 
 enum VotingStep {
@@ -34,26 +34,58 @@ export default function Vote() {
   // Use MetaMask hook for wallet integration
   const { isConnected, connect, account } = useMetaMask();
 
-  // Query for election data
+  // Only fetch election data after NIN verification
   const { data: electionData, isLoading: loadingElection } = useQuery({
     queryKey: ['activeElection'],
     queryFn: async () => {
-      const activeElectionId = await getActiveElectionId();
-      if (!activeElectionId) return null;
+      try {
+        // Get next election ID
+        const nextId = await getActiveElectionId();
+        if (!nextId) return null;
 
-      const electionInfo = await getElectionInfo(activeElectionId);
-      if (!electionInfo || !electionInfo.active) return null;
+        // Look backwards from current ID to find the most recent valid election
+        for (let id = nextId - 1; id >= 1; id--) {
+          try {
+            const electionInfo = await getElectionInfo(id);
+            if (electionInfo?.name) {
+              const candidates = await getAllCandidates(id);
+              const totalVotes = await getTotalVotes(id);
 
-      const candidates = await getAllCandidates(activeElectionId);
+              // Calculate if election is active based on time
+              const now = new Date();
+              const startTime = new Date(electionInfo.startTime);
+              const endTime = new Date(electionInfo.endTime);
+              const isActive = now >= startTime && now <= endTime;
 
-      return {
-        electionId: activeElectionId,
-        info: electionInfo,
-        candidates
-      };
+              // Only return if the election is active
+              if (isActive && electionInfo.active) {
+                return {
+                  id,
+                  name: electionInfo.name,
+                  startTime,
+                  endTime,
+                  candidates: candidates.map(candidate => ({
+                    ...candidate,
+                    percentage: totalVotes > 0 ? Math.round((candidate.votes / totalVotes) * 100) : 0
+                  })),
+                  totalVotes
+                };
+              }
+            }
+          } catch (error) {
+            console.error(`Error checking election ${id}:`, error);
+            continue;
+          }
+        }
+        return null;
+      } catch (error) {
+        console.error("Error fetching election data:", error);
+        return null;
+      }
     },
-    staleTime: 30000, // Consider data fresh for 30 seconds
-    refetchInterval: 60000, // Only refetch every minute
+    enabled: currentStep === VotingStep.CANDIDATE_SELECTION, // Only fetch when reaching candidate selection
+    staleTime: 30000,
+    refetchInterval: 60000
   });
 
   const handleSelectCandidate = (candidate: Candidate) => {
@@ -61,24 +93,20 @@ export default function Vote() {
   };
 
   const handleCastVote = async () => {
-    if (!selectedCandidate || !electionData?.electionId) return;
+    if (!selectedCandidate || !electionData?.id) return;
 
     setIsSubmitting(true);
 
     try {
-      // First connect to MetaMask if not connected
       if (!isConnected) {
         await connect();
       }
 
-      // Only proceed if connection was successful
       if (isConnected && account) {
-        // Hash the voter's NIN for privacy
         const voterNINHash = await hashNIN(voterNIN);
 
-        // Cast the vote on the blockchain
         const result = await castVote(
-          electionData.electionId,
+          electionData.id,
           selectedCandidate.index,
           voterNINHash
         );
@@ -111,18 +139,6 @@ export default function Vote() {
 
   // Render different content based on step
   const renderContent = () => {
-    if (loadingElection) {
-      return (
-        <div className="text-center py-8">
-          <p className="text-gray-500">Loading election data...</p>
-        </div>
-      );
-    }
-
-    if (!electionData?.info) {
-      return <NoActiveElection />;
-    }
-
     if (hasVoted) {
       return (
         <TransactionConfirmation
@@ -150,6 +166,18 @@ export default function Vote() {
         );
 
       case VotingStep.CANDIDATE_SELECTION:
+        if (loadingElection) {
+          return (
+            <div className="text-center py-8">
+              <p className="text-gray-500">Loading election data...</p>
+            </div>
+          );
+        }
+
+        if (!electionData) {
+          return <NoActiveElection />;
+        }
+
         return (
           <div className="space-y-6 max-w-6xl mx-auto">
             <UserInfoCard userInfo={{ nin: voterNIN }} />
