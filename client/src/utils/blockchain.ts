@@ -381,28 +381,18 @@ const getCandidateCount = async (electionId: number): Promise<number> => {
 
 // Get candidate info
 export const getCandidate = async (electionId: number, candidateIndex: number) => {
-  console.log(`Getting candidate at index ${candidateIndex} for election ${electionId}`);
-  
+  console.log(`Getting candidate ${candidateIndex} info for election ${electionId}`);
+  const contract = getReadOnlyContract();
+
   try {
-    // Try to get from localStorage cache first
-    const cachedCandidates = localStorage.getItem(`election_${electionId}_candidates`);
-    if (cachedCandidates) {
-      const candidates = JSON.parse(cachedCandidates);
-      if (candidates.length > candidateIndex) {
-        console.log(`Found candidate in cache: ${candidates[candidateIndex].name}`);
-        return candidates[candidateIndex];
-      }
-    }
+    const info = await contract.getCandidate(electionId, candidateIndex);
     
-    // If we get here, we couldn't find the candidate in the cache
-    // Let's load all candidates and try again
-    const allCandidates = await getAllCandidates(electionId);
-    if (allCandidates.length > candidateIndex) {
-      return allCandidates[candidateIndex];
-    }
-    
-    console.log(`No candidate found at index ${candidateIndex}`);
-    return null;
+    return {
+      name: info.name,
+      party: info.party,
+      votes: info.votes.toNumber(),
+      index: candidateIndex,
+    };
   } catch (error) {
     console.error(
       `Error getting candidate info for election ${electionId}, candidate ${candidateIndex}:`,
@@ -416,88 +406,44 @@ export const getCandidate = async (electionId: number, candidateIndex: number) =
 export const getAllCandidates = async (electionId: number) => {
   console.log(`Getting all candidates for election ${electionId}`);
   const contract = getReadOnlyContract();
-
+  
   try {
-    // Check if the election exists first
-    const electionInfo = await contract.elections(electionId);
-    if (!electionInfo.exists) {
-      console.log(`Election ${electionId} does not exist`);
-      return [];
+    const result = await contract.getAllCandidates(electionId);
+    
+    const candidates = [];
+    for (let i = 0; i < result.names.length; i++) {
+      candidates.push({
+        name: result.names[i],
+        party: result.parties[i],
+        votes: result.votesCounts[i].toNumber(),
+        index: i
+      });
     }
     
-    console.log(`Election ${electionId} exists with name: ${electionInfo.name}`);
-    
-    // Try to get candidates from the VoteCast events
-    try {
-      console.log("Trying to get candidates from VoteCast events");
-      const provider = getProvider();
-      // Look for vote events to extract candidate information
-      const voteFilter = contract.filters.VoteCast(electionId);
-      const voteEvents = await contract.queryFilter(voteFilter);
-      
-      // Map to track the candidates we've seen
-      const candidatesMap = new Map();
-      
-      // Get candidates from events
-      for (const event of voteEvents) {
-        try {
-          // Extract candidate index from event
-          const candidateIndex = Number(event.args?.candidateIndex || 0);
-          
-          // If we haven't seen this candidate, add it to our map
-          if (!candidatesMap.has(candidateIndex)) {
-            // The contract doesn't provide candidate names via events, so we need to use the stored data
-            // when the election was created
-            candidatesMap.set(candidateIndex, {
-              name: `Candidate ${candidateIndex + 1}`,
-              party: "Unknown Party",
-              votes: 1,
-              index: candidateIndex
-            });
-          } else {
-            // Update vote count for this candidate
-            const candidate = candidatesMap.get(candidateIndex);
-            candidate.votes += 1;
-            candidatesMap.set(candidateIndex, candidate);
-          }
-        } catch (e) {
-          console.log("Error processing vote event:", e);
-        }
-      }
-      
-      console.log(`Found ${candidatesMap.size} candidates from events`);
-      
-      // If we have candidates from events, use them
-      if (candidatesMap.size > 0) {
-        const candidatesArray = Array.from(candidatesMap.values());
-        return candidatesArray;
-      }
-    } catch (e) {
-      console.log("Could not get candidates from events:", e);
+    // Save candidates to localStorage as a backup
+    if (candidates.length > 0) {
+      localStorage.setItem(`election_${electionId}_candidates`, JSON.stringify(candidates));
     }
     
-    // If we can't get from events, check localStorage cache
-    console.log("Checking for candidates in localStorage cache");
-    try {
-      const cachedCandidates = localStorage.getItem(`election_${electionId}_candidates`);
-      if (cachedCandidates) {
-        const parsed = JSON.parse(cachedCandidates);
-        console.log(`Found ${parsed.length} candidates in cache`);
-        return parsed;
-      } else {
-        console.log("No cached candidates found in localStorage");
-      }
-    } catch (cacheError) {
-      console.log("Error accessing localStorage:", cacheError);
-    }
-    
-    console.log("Could not retrieve candidates. Please create an election with candidates first.");
-    return [];
+    return candidates;
   } catch (error) {
     console.error(
       `Error getting all candidates for election ${electionId}:`,
       error
     );
+    
+    // Fallback to localStorage if contract call fails
+    try {
+      const cachedCandidates = localStorage.getItem(`election_${electionId}_candidates`);
+      if (cachedCandidates) {
+        const parsed = JSON.parse(cachedCandidates);
+        console.log(`Fallback: Found ${parsed.length} candidates in cache`);
+        return parsed;
+      }
+    } catch (cacheError) {
+      console.log("Error accessing localStorage:", cacheError);
+    }
+    
     return [];
   }
 };
