@@ -88,30 +88,34 @@ export function AdminElectionCreator({ isElectionActive }: AdminElectionCreatorP
 
   const onSubmit = async (data: ElectionFormValues) => {
     // Validate candidates
-    const invalidCandidates = candidates.some(c => !c.name || !c.party);
-
-    if (invalidCandidates) {
+    if (candidates.some(c => !c.name || !c.party)) {
       toast({
-        title: "Invalid candidates",
-        description: "All candidates must have a name and party",
+        title: "Error",
+        description: "All candidate names and parties must be filled",
         variant: "destructive",
       });
       return;
     }
 
-    // Prepare data for blockchain
+    if (!account) {
+      toast({
+        title: "Error",
+        description: "Please connect your wallet first",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const candidateNames = candidates.map(c => c.name);
     const candidateParties = candidates.map(c => c.party);
-    const startTime = new Date(data.startTime);
-    const endTime = new Date(data.endTime);
 
     try {
       const result = await createElection(
         data.name,
-        startTime,
-        endTime,
+        new Date(data.startTime),
+        new Date(data.endTime),
         candidateNames,
-        candidateParties
+        candidateParties,
       );
 
       if (result.success) {
