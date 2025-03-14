@@ -245,11 +245,7 @@ export const castVote = async (electionId: number, candidateIndex: number, voter
   }
 };
 
-// Check if candidates exist for an election
-const candidatesExistInCache = (electionId: number): boolean => {
-  const cached = localStorage.getItem(`election_${electionId}_candidates`);
-  return cached !== null;
-};
+// Function removed to avoid duplicate declarations
 
 // Get active election ID (using currentElectionId from contract and checking if it's active)
 export const getActiveElectionId = async (): Promise<number> => {
@@ -270,8 +266,11 @@ export const getActiveElectionId = async (): Promise<number> => {
                      Number(election.endTime) >= now;
       
       if (isActive) {
-        // Ensure we have candidates for this election (for testing purposes)
-        ensureSampleCandidates(currentIdNumber);
+        // Check if this election has candidates in our cache
+        const cachedCandidates = localStorage.getItem(`election_${currentIdNumber}_candidates`);
+        if (!cachedCandidates) {
+          console.log(`No candidates found in cache for active election ${currentIdNumber}. Please create an election with candidates.`);
+        }
         return currentIdNumber;
       }
     }
@@ -306,32 +305,20 @@ export const getActiveElectionId = async (): Promise<number> => {
   }
 };
 
-// Ensure we have some election info in localStorage for testing
-const ensureSampleElection = (electionId: number) => {
-  if (!localStorage.getItem(`election_${electionId}_info`)) {
-    console.log(`Adding sample election info for election ${electionId} to localStorage for testing`);
-    const now = new Date();
-    const tomorrow = new Date(now);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    
-    const sampleElection = {
-      name: "Presidential Election 2025",
-      startTime: now,
-      endTime: tomorrow,
-      active: true,
-      candidateCount: 3
-    };
-    
-    localStorage.setItem(`election_${electionId}_info`, JSON.stringify(sampleElection));
-  }
+// Check if election info exists in cache
+const electionInfoExistsInCache = (electionId: number): boolean => {
+  const cached = localStorage.getItem(`election_${electionId}_info`);
+  return cached !== null;
 };
 
 // Get election info
 export const getElectionInfo = async (electionId: number) => {
   console.log(`Getting election info for ID ${electionId}`);
   
-  // Ensure we have sample data in localStorage for testing purposes
-  ensureSampleElection(electionId);
+  // Check if we have cached election info
+  if (!electionInfoExistsInCache(electionId)) {
+    console.log(`No election info found in cache for election ${electionId}`);
+  }
   
   const contract = getReadOnlyContract();
 
@@ -386,9 +373,10 @@ const getCandidateCount = async (electionId: number): Promise<number> => {
   
   // If we don't have cached data, there's no reliable way to get the count from the contract
   // because the contract doesn't expose a candidates mapping that we can query
-
-  // Return default count for testing
-  return 3; // Default to 3 candidates for new elections
+  
+  // We must have real candidates, we can't return a default count
+  console.log("No candidate information found for election. Please create an election with candidates first.");
+  return 0;
 };
 
 // Get candidate info
