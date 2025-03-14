@@ -58,7 +58,9 @@ export const isAdmin = async (address: string): Promise<boolean> => {
     const contract = getReadOnlyContract();
     const admin = await contract.admin();
     console.log("Contract admin address:", admin);
-    return admin.toLowerCase() === address.toLowerCase();
+    const isMatch = admin.toLowerCase() === address.toLowerCase();
+    console.log("Is admin match?", isMatch);
+    return isMatch;
   } catch (error) {
     console.error("Error checking admin status:", error);
     return false;
@@ -85,22 +87,25 @@ export const createElection = async (
     await window.ethereum.request({ method: "eth_requestAccounts" });
     const provider = new ethers.BrowserProvider(window.ethereum);
     const signer = await provider.getSigner();
-    console.log("Connected with address:", await signer.getAddress());
+    const signerAddress = await signer.getAddress();
+    console.log("Connected with address:", signerAddress);
 
     // Check admin status
-    const signerAddress = await signer.getAddress();
-    console.log("Checking admin status for:", signerAddress);
     const isAdminUser = await isAdmin(signerAddress);
     console.log("Is admin?", isAdminUser);
 
     if (!isAdminUser) {
-      return { success: false, error: "Only admin can create elections" };
+      console.error("Address is not admin:", signerAddress);
+      return { 
+        success: false, 
+        error: "Only the admin can create elections. Please connect with the admin wallet." 
+      };
     }
 
     const contract = new ethers.Contract(
       CONTRACT_ADDRESS,
       VotingSystemABI.abi,
-      signer,
+      signer
     );
 
     // Input validation
@@ -177,7 +182,7 @@ export const createElection = async (
       hash: receipt.hash,
       timestamp: new Date(block.timestamp * 1000),
       from: receipt.from,
-      to: receipt.to,
+      to: receipt.to || "",
       method: "createElection",
       value: "0",
       blockNumber: receipt.blockNumber,
@@ -215,7 +220,6 @@ export const createElection = async (
   } catch (error: any) {
     console.error("Error creating election:", error);
 
-    // Handle specific error cases
     if (error.code === "ACTION_REJECTED") {
       return { success: false, error: "Transaction was rejected in MetaMask" };
     }
