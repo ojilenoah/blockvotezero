@@ -20,7 +20,7 @@ export function UserInfoCard({ userInfo }: UserInfoCardProps) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-1">
             <p className="text-sm font-medium text-muted-foreground">Full Name</p>
-            <p className="font-medium">{userInfo.name}</p>
+            <p className="font-medium">{userInfo.name || "Voter name not available"}</p>
           </div>
           <div className="space-y-1">
             <p className="text-sm font-medium text-muted-foreground">National ID (NIN)</p>
@@ -28,11 +28,11 @@ export function UserInfoCard({ userInfo }: UserInfoCardProps) {
           </div>
           <div className="space-y-1">
             <p className="text-sm font-medium text-muted-foreground">Registration Date</p>
-            <p className="font-medium">{userInfo.registrationDate}</p>
+            <p className="font-medium">{userInfo.registrationDate || "Not registered"}</p>
           </div>
           <div className="space-y-1">
             <p className="text-sm font-medium text-muted-foreground">Voting District</p>
-            <p className="font-medium">{userInfo.votingDistrict}</p>
+            <p className="font-medium">{userInfo.votingDistrict || "District not assigned"}</p>
           </div>
         </div>
       </CardContent>
