@@ -1,14 +1,13 @@
 // src/utils/blockchain.js
 
-import { ethers } from "ethers";
-import VotingSystemABI from "../contracts/VotingSystem.json"; // This will be the ABI from the compiled contract
+import { ethers } from 'ethers';
+import VotingSystemABI from '../contracts/VotingSystem.json'; // This will be the ABI from the compiled contract
 
-// Contract address from deployment (update after deploying)
-const CONTRACT_ADDRESS = "0x65d11a89f244c445112E4E9883FC9b3562b1F281";
+// Contract address from deployment (update with your actual deployed proxy address)
+const CONTRACT_ADDRESS = '0xc0895D39fBBD1918067d5Fa41beDAF51d36665B5';
 
-// Alchemy provider URL
-const ALCHEMY_URL =
-  "https://polygon-amoy.g.alchemy.com/v2/GH7yUV1qmRdvVI-knD8FYKRyzgBlb1ct";
+// Alchemy provider URL - Replace with your Alchemy API key
+const ALCHEMY_URL = 'https://polygon-amoy.g.alchemy.com/v2/E822ZzOp7UFQy6Zt82uF4hzcdklL-qoe';
 
 // Initialize ethers provider
 const getProvider = () => {
@@ -50,32 +49,26 @@ export const getAddressFromPrivateKey = (privateKey) => {
 
 // Create an election
 export const createElection = async (
+  privateKey,
   name,
   startTime,
   endTime,
   candidateNames,
-  candidateParties,
+  candidateParties
 ) => {
-  if (!window.ethereum) {
-    return { success: false, error: "MetaMask is not installed!" };
-  }
-
+  const contract = getSignedContract(privateKey);
+  
   try {
-    await window.ethereum.request({ method: "eth_requestAccounts" });
-    const provider = new ethers.providers.Web3Provider(window.ethereum);
-    const signer = provider.getSigner();
-    const contract = new ethers.Contract(CONTRACT_ADDRESS, VotingSystemABI, signer);
-
     const tx = await contract.createElection(
       name,
-      Math.floor(startTime.getTime() / 1000),
-      Math.floor(endTime.getTime() / 1000),
+      Math.floor(startTime.getTime() / 1000), // Convert to Unix timestamp
+      Math.floor(endTime.getTime() / 1000),   // Convert to Unix timestamp
       candidateNames,
-      candidateParties,
+      candidateParties
     );
-
+    
     const receipt = await tx.wait();
-    return { success: true, transactionHash: receipt.hash };
+    return { success: true, transactionHash: receipt.transactionHash };
   } catch (error) {
     console.error("Error creating election:", error);
     return { success: false, error: error.message };
@@ -85,7 +78,7 @@ export const createElection = async (
 // Change admin
 export const changeAdmin = async (privateKey, newAdminAddress) => {
   const contract = getSignedContract(privateKey);
-
+  
   try {
     const tx = await contract.changeAdmin(newAdminAddress);
     const receipt = await tx.wait();
@@ -105,24 +98,16 @@ export const castVote = async (electionId, candidateIndex, voterNINHash) => {
   if (!window.ethereum) {
     return { success: false, error: "MetaMask is not installed!" };
   }
-
+  
   try {
-    await window.ethereum.request({ method: "eth_requestAccounts" });
+    await window.ethereum.request({ method: 'eth_requestAccounts' });
     const provider = new ethers.providers.Web3Provider(window.ethereum);
     const signer = provider.getSigner();
-    const contract = new ethers.Contract(
-      CONTRACT_ADDRESS,
-      VotingSystemABI,
-      signer,
-    );
-
-    const tx = await contract.castVote(
-      electionId,
-      candidateIndex,
-      voterNINHash,
-    );
+    const contract = new ethers.Contract(CONTRACT_ADDRESS, VotingSystemABI, signer);
+    
+    const tx = await contract.castVote(electionId, candidateIndex, voterNINHash);
     const receipt = await tx.wait();
-
+    
     return { success: true, transactionHash: receipt.transactionHash };
   } catch (error) {
     console.error("Error casting vote:", error);
@@ -133,9 +118,10 @@ export const castVote = async (electionId, candidateIndex, voterNINHash) => {
 // Check if voter has already voted
 export const hasVoted = async (electionId, voterNINHash) => {
   const contract = getReadOnlyContract();
-
+  
   try {
-    return await contract.hasVoted(electionId, voterNINHash);
+    const voted = await contract.checkVoterStatus(electionId, voterNINHash);
+    return voted;
   } catch (error) {
     console.error("Error checking if voter has voted:", error);
     return false;
@@ -147,7 +133,7 @@ export const hasVoted = async (electionId, voterNINHash) => {
 // Get active election ID
 export const getActiveElectionId = async () => {
   const contract = getReadOnlyContract();
-
+  
   try {
     const activeElectionId = await contract.getActiveElectionId();
     return activeElectionId.toNumber();
@@ -160,16 +146,16 @@ export const getActiveElectionId = async () => {
 // Get election info
 export const getElectionInfo = async (electionId) => {
   const contract = getReadOnlyContract();
-
+  
   try {
     const info = await contract.getElectionInfo(electionId);
-
+    
     return {
       name: info.name,
       startTime: new Date(info.startTime.toNumber() * 1000),
       endTime: new Date(info.endTime.toNumber() * 1000),
       active: info.active,
-      candidateCount: info.candidateCount.toNumber(),
+      candidateCount: info.candidateCount.toNumber()
     };
   } catch (error) {
     console.error(`Error getting election info for ID ${electionId}:`, error);
@@ -180,20 +166,17 @@ export const getElectionInfo = async (electionId) => {
 // Get candidate info
 export const getCandidate = async (electionId, candidateIndex) => {
   const contract = getReadOnlyContract();
-
+  
   try {
     const info = await contract.getCandidate(electionId, candidateIndex);
-
+    
     return {
       name: info.name,
       party: info.party,
-      votes: info.votes.toNumber(),
+      votes: info.votes.toNumber()
     };
   } catch (error) {
-    console.error(
-      `Error getting candidate info for election ${electionId}, candidate ${candidateIndex}:`,
-      error,
-    );
+    console.error(`Error getting candidate info for election ${electionId}, candidate ${candidateIndex}:`, error);
     return null;
   }
 };
@@ -201,25 +184,23 @@ export const getCandidate = async (electionId, candidateIndex) => {
 // Get all candidates for an election
 export const getAllCandidates = async (electionId) => {
   const contract = getReadOnlyContract();
-
+  
   try {
-    const info = await contract.getElectionInfo(electionId);
-    const candidateCount = info.candidateCount.toNumber();
-
+    const result = await contract.getAllCandidates(electionId);
+    
     const candidates = [];
-    for (let i = 0; i < candidateCount; i++) {
-      const candidate = await getCandidate(electionId, i);
-      if (candidate) {
-        candidates.push({ ...candidate, index: i });
-      }
+    for (let i = 0; i < result.names.length; i++) {
+      candidates.push({
+        name: result.names[i],
+        party: result.parties[i],
+        votes: result.votesCounts[i].toNumber(),
+        index: i
+      });
     }
-
+    
     return candidates;
   } catch (error) {
-    console.error(
-      `Error getting all candidates for election ${electionId}:`,
-      error,
-    );
+    console.error(`Error getting all candidates for election ${electionId}:`, error);
     return [];
   }
 };
@@ -227,15 +208,12 @@ export const getAllCandidates = async (electionId) => {
 // Get total votes in an election
 export const getTotalVotes = async (electionId) => {
   const contract = getReadOnlyContract();
-
+  
   try {
     const total = await contract.getTotalVotes(electionId);
     return total.toNumber();
   } catch (error) {
-    console.error(
-      `Error getting total votes for election ${electionId}:`,
-      error,
-    );
+    console.error(`Error getting total votes for election ${electionId}:`, error);
     return 0;
   }
 };
@@ -244,9 +222,8 @@ export const getTotalVotes = async (electionId) => {
 export const hashNIN = async (nin) => {
   const encoder = new TextEncoder();
   const data = encoder.encode(nin);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex =
-    "0x" + hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+  const hashHex = '0x' + hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
   return hashHex;
 };
