@@ -5,19 +5,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  getActiveElectionId,
-  getElectionInfo,
-  getAllCandidates,
-  getTotalVotes,
+import { 
+  getActiveElectionId, 
+  getElectionInfo, 
+  getAllCandidates, 
+  getTotalVotes, 
   CONTRACT_ADDRESS,
   getContractTransactions,
-  Transaction as BlockchainTransaction
+  Transaction as BlockchainTransaction 
 } from "@/utils/blockchain";
 import { useMetaMask } from "@/hooks/use-metamask";
 import { useToast } from "@/hooks/use-toast";
-import { getAllElections } from "@/utils/blockchain"; // Added import
-
 
 interface Election {
   id: number;
@@ -59,7 +57,7 @@ export default function Explorer() {
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (!searchQuery.trim()) return;
-
+    
     setIsSearching(true);
     // In a real implementation, this would search the blockchain
     setTimeout(() => {
@@ -76,60 +74,71 @@ export default function Explorer() {
     const fetchElections = async () => {
       setLoadingElections(true);
       try {
-        const elections = await getAllElections();
+        const currentElectionId = await getActiveElectionId();
         const electionList: Election[] = [];
         let totalVotesCount = 0;
-
-        for (const id of elections) {
+        
+        // Lookup up to the first 10 possible election IDs
+        const maxElectionsToFetch = 10;
+        
+        for (let id = 1; id <= Math.max(currentElectionId, maxElectionsToFetch); id++) {
           try {
             const electionInfo = await getElectionInfo(id);
-            if (!electionInfo) continue;
-
-            const now = new Date();
-            const startTime = new Date(electionInfo.startTime);
-            const endTime = new Date(electionInfo.endTime);
-            let status: "Active" | "Upcoming" | "Completed" = "Completed";
-
-            if (now < startTime) {
-              status = "Upcoming";
-            } else if (now >= startTime && now <= endTime) {
-              status = "Active";
+            
+            if (electionInfo && electionInfo.name) {
+              const now = new Date();
+              const startTime = new Date(electionInfo.startTime);
+              const endTime = new Date(electionInfo.endTime);
+              let status: "Active" | "Upcoming" | "Completed" = "Completed";
+              
+              if (now < startTime) {
+                status = "Upcoming";
+              } else if (now >= startTime && now <= endTime) {
+                status = "Active";
+              }
+              
+              const votes = await getTotalVotes(id);
+              totalVotesCount += votes;
+              
+              electionList.push({
+                id,
+                name: electionInfo.name,
+                startTime,
+                endTime,
+                status,
+                totalVotes: votes
+              });
             }
-
-            const votes = await getTotalVotes(id);
-            totalVotesCount += votes;
-
-            electionList.push({
-              id,
-              name: electionInfo.name,
-              startTime,
-              endTime,
-              status,
-              totalVotes: votes
-            });
           } catch (err) {
             console.error(`Error fetching election ${id}:`, err);
           }
         }
-
+        
         // Sort elections: Active first, then Upcoming, then Completed (most recent first)
         electionList.sort((a, b) => {
           if (a.status !== b.status) {
             const statusOrder = { Active: 0, Upcoming: 1, Completed: 2 };
             return statusOrder[a.status] - statusOrder[b.status];
           }
-          return b.startTime.getTime() - a.startTime.getTime();
+          
+          // If same status, sort by date (most recent first for completed, soonest first for upcoming)
+          if (a.status === "Completed") {
+            return b.endTime.getTime() - a.endTime.getTime();
+          } else {
+            return a.startTime.getTime() - b.startTime.getTime();
+          }
         });
-
+        
         setElections(electionList);
-
+        
+        // Update statistics
         setStatistics({
           totalElections: electionList.length,
           totalVotes: totalVotesCount,
           activeElections: electionList.filter(e => e.status === "Active").length,
           completedElections: electionList.filter(e => e.status === "Completed").length,
           upcomingElections: electionList.filter(e => e.status === "Upcoming").length,
-          currentElectionId: Math.max(...elections)
+          currentElectionId
         });
       } catch (error) {
         console.error("Error fetching elections:", error);
@@ -145,7 +154,7 @@ export default function Explorer() {
 
     fetchElections();
   }, [toast]);
-
+  
   // Fetch actual blockchain transactions using Alchemy API
   useEffect(() => {
     const fetchTransactions = async () => {
@@ -153,7 +162,7 @@ export default function Explorer() {
       try {
         // Get transactions from the blockchain API
         const blockchainTransactions = await getContractTransactions();
-
+        
         // Map the returned blockchain transactions to our Transaction interface
         const formattedTransactions: Transaction[] = blockchainTransactions.map(tx => ({
           hash: tx.hash,
@@ -164,7 +173,7 @@ export default function Explorer() {
           from: tx.from,
           to: tx.to
         }));
-
+        
         setTransactions(formattedTransactions);
       } catch (error) {
         console.error("Error fetching blockchain transactions:", error);
@@ -177,7 +186,7 @@ export default function Explorer() {
         setLoadingTransactions(false);
       }
     };
-
+    
     fetchTransactions();
   }, [toast]);
 
@@ -204,7 +213,7 @@ export default function Explorer() {
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
-
+      
       <main className="flex-grow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="mb-8">
@@ -240,14 +249,14 @@ export default function Explorer() {
               <TabsTrigger value="elections">Elections</TabsTrigger>
               <TabsTrigger value="statistics">Statistics</TabsTrigger>
             </TabsList>
-
+            
             <TabsContent value="latest">
               <Card>
                 <CardHeader>
                   <CardTitle>Contract Transactions</CardTitle>
                   <p className="text-sm text-gray-500 mt-1">
-                    {transactions.length > 0
-                      ? "Showing actual blockchain transactions from contract interactions"
+                    {transactions.length > 0 
+                      ? "Showing actual blockchain transactions from contract interactions" 
                       : "No contract transactions found on the blockchain yet"}
                   </p>
                 </CardHeader>
@@ -264,10 +273,10 @@ export default function Explorer() {
                           <div className="flex justify-between items-start">
                             <div>
                               <p className="text-sm font-medium text-primary">
-                                {tx.method === "createElection"
-                                  ? "Election Created"
-                                  : tx.method === "castVote"
-                                    ? "Vote Cast"
+                                {tx.method === "createElection" 
+                                  ? "Election Created" 
+                                  : tx.method === "castVote" 
+                                    ? "Vote Cast" 
                                     : "Contract Interaction"}
                               </p>
                               <p className="text-sm font-mono text-gray-600 truncate max-w-xs sm:max-w-sm md:max-w-md">
@@ -299,10 +308,10 @@ export default function Explorer() {
                       ))}
 
                       <div className="flex justify-center pt-4">
-                        <a
+                        <a 
                           href={`https://www.oklink.com/amoy/address/${CONTRACT_ADDRESS}`}
                           target="_blank"
-                          rel="noopener noreferrer"
+                          rel="noopener noreferrer" 
                           className="text-primary hover:underline text-sm"
                         >
                           View all transactions on blockchain explorer →
@@ -359,7 +368,7 @@ export default function Explorer() {
                             const endTime = Math.min(election.endTime.getTime(), Date.now());
                             const timeRange = endTime - startTime;
                             const voteTime = new Date(startTime + (timeRange * (index / voteCount)));
-
+                            
                             return {
                               id: `vote-${election.id}-${index}`,
                               electionId: election.id,
@@ -398,10 +407,10 @@ export default function Explorer() {
                       }
 
                       <div className="flex justify-center pt-4">
-                        <a
+                        <a 
                           href={`https://www.oklink.com/amoy/address/${CONTRACT_ADDRESS}`}
                           target="_blank"
-                          rel="noopener noreferrer"
+                          rel="noopener noreferrer" 
                           className="text-primary hover:underline text-sm"
                         >
                           View all transactions on blockchain explorer →
@@ -499,7 +508,7 @@ export default function Explorer() {
           </Tabs>
         </div>
       </main>
-
+      
       <Footer />
     </div>
   );
