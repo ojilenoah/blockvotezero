@@ -21,101 +21,64 @@ export function ElectionInfoCard() {
       try {
         setLoading(true);
         setError(null);
-        
+
         console.log("Fetching election data for info card");
-        
-        // First try to get active election ID from blockchain
-        let activeElectionId = await getActiveElectionId();
-        
-        // For testing: if we can't get one from the blockchain, check localStorage
-        if (!activeElectionId) {
-          console.log("No active election found from blockchain, checking localStorage");
-          const testId = localStorage.getItem("testing_election_id");
-          if (testId) {
-            activeElectionId = parseInt(testId);
-            console.log("Using testing election ID from localStorage:", activeElectionId);
-          }
-        }
-        
+
+        // Get active election ID from blockchain
+        const activeElectionId = await getActiveElectionId();
+        console.log("Active election ID:", activeElectionId);
+
         if (activeElectionId > 0) {
           console.log(`Found active election with ID: ${activeElectionId}`);
-          
+
           // Get election info
           const electionInfo = await getElectionInfo(activeElectionId);
-          
-          if (electionInfo && electionInfo.name) {
-            console.log("Election info loaded:", electionInfo);
+          console.log("Election info loaded:", electionInfo);
+
+          if (electionInfo && (electionInfo.active || electionInfo.upcoming)) {
             const startTime = new Date(electionInfo.startTime);
             const endTime = new Date(electionInfo.endTime);
-            
+
             setElectionData({
               id: activeElectionId,
               title: electionInfo.name,
               dateRange: `${startTime.toLocaleDateString()} - ${endTime.toLocaleDateString()}`,
-              schedule: `Voting closes at ${endTime.toLocaleTimeString()} UTC`,
-              description: "Your vote matters. Participate in this election to make your voice heard.",
+              schedule: `Voting ${electionInfo.upcoming ? 'starts' : 'closes'} at ${electionInfo.upcoming ? startTime.toLocaleTimeString() : endTime.toLocaleTimeString()} UTC`,
+              description: electionInfo.upcoming 
+                ? "This election is scheduled to start soon. Be ready to cast your vote!"
+                : "Your vote matters. Participate in this election to make your voice heard.",
               isActive: electionInfo.active,
+              isUpcoming: electionInfo.upcoming,
               startTime,
               endTime
             });
 
-            console.log("Fetching candidates for election:", activeElectionId);
-            const candidateList = await getAllCandidates(activeElectionId);
-            
-            if (candidateList && candidateList.length > 0) {
-              console.log(`Successfully loaded ${candidateList.length} candidates:`, candidateList);
-              
-              const totalVotes = candidateList.reduce((sum, c) => sum + (c.votes || 0), 0);
-              console.log("Total votes:", totalVotes);
+            // Get candidates if election is active
+            if (electionInfo.active) {
+              console.log("Fetching candidates for election:", activeElectionId);
+              const candidateList = await getAllCandidates(activeElectionId);
 
-              // Calculate percentages
-              const candidatesWithPercentages = candidateList.map(candidate => ({
-                name: candidate.name,
-                party: candidate.party,
-                votes: candidate.votes || 0,
-                percentage: totalVotes > 0 ? Math.round(((candidate.votes || 0) / totalVotes) * 100) : 0
-              }));
+              if (candidateList && candidateList.length > 0) {
+                console.log(`Successfully loaded ${candidateList.length} candidates:`, candidateList);
 
-              setCandidates(candidatesWithPercentages);
-              console.log("Candidates with percentages:", candidatesWithPercentages);
-            } else {
-              console.error("No candidates found for election:", activeElectionId);
-              // Try to get from localStorage if we have no candidates from blockchain
-              try {
-                const cachedCandidates = localStorage.getItem(`election_${activeElectionId}_candidates`);
-                if (cachedCandidates) {
-                  const parsedCandidates = JSON.parse(cachedCandidates);
-                  console.log(`Using ${parsedCandidates.length} cached candidates from localStorage`);
-                  
-                  // Calculate votes and percentages
-                  const totalVotes = parsedCandidates.reduce((sum, c) => sum + (c.votes || 0), 0);
-                  const candidatesWithPercentages = parsedCandidates.map(candidate => ({
-                    name: candidate.name,
-                    party: candidate.party,
-                    votes: candidate.votes || 0,
-                    percentage: totalVotes > 0 ? Math.round(((candidate.votes || 0) / totalVotes) * 100) : 0
-                  }));
-                  
-                  setCandidates(candidatesWithPercentages);
-                } else {
-                  setCandidates([]);
-                  toast({
-                    title: "Warning",
-                    description: "No candidates found for this election",
-                    variant: "destructive"
-                  });
-                }
-              } catch (cacheError) {
-                console.error("Error retrieving cached candidates:", cacheError);
-                setCandidates([]);
+                const totalVotes = candidateList.reduce((sum, c) => sum + (c.votes || 0), 0);
+
+                const candidatesWithPercentages = candidateList.map(candidate => ({
+                  name: candidate.name,
+                  party: candidate.party,
+                  votes: candidate.votes || 0,
+                  percentage: totalVotes > 0 ? Math.round(((candidate.votes || 0) / totalVotes) * 100) : 0
+                }));
+
+                setCandidates(candidatesWithPercentages);
               }
             }
           } else {
-            console.log("No valid election info found");
+            console.log("No active election found");
             setElectionData(null);
           }
         } else {
-          console.log("No active election found");
+          console.log("No active election ID found");
           setElectionData(null);
         }
       } catch (error: any) {
@@ -132,9 +95,7 @@ export function ElectionInfoCard() {
     };
 
     fetchElectionData();
-    // Set up polling interval for real-time updates
-    const interval = setInterval(fetchElectionData, 30000); // Update every 30 seconds
-
+    const interval = setInterval(fetchElectionData, 30000);
     return () => clearInterval(interval);
   }, [toast]);
 
@@ -172,11 +133,6 @@ export function ElectionInfoCard() {
     );
   }
 
-  const isElectionActive = electionData.isActive;
-  const now = new Date();
-  const hasElectionStarted = now >= electionData.startTime;
-  const hasElectionEnded = now > electionData.endTime;
-
   return (
     <Card className="bg-white shadow-md rounded-lg p-6 mb-8">
       <div className="flex flex-col lg:flex-row">
@@ -205,120 +161,119 @@ export function ElectionInfoCard() {
           <Link href="/vote">
             <Button 
               className="mt-2"
-              disabled={!isElectionActive || hasElectionEnded || !hasElectionStarted}
+              disabled={!electionData.isActive || electionData.isUpcoming}
             >
-              {!hasElectionStarted 
-                ? "Election hasn't started yet"
-                : hasElectionEnded 
-                  ? "Election has ended" 
-                  : "Cast Your Vote"}
+              {electionData.isUpcoming 
+                ? "Election starts soon"
+                : electionData.isActive 
+                  ? "Cast Your Vote"
+                  : "Election has ended"}
             </Button>
           </Link>
         </div>
-        <div className="flex-1 lg:border-l lg:pl-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-medium text-gray-900">Real-time Results</h3>
-            <div className="inline-flex shadow-sm rounded-md">
-              <button 
-                type="button" 
-                className={`relative inline-flex items-center px-3 py-1.5 rounded-l-md border border-gray-300 ${viewMode === 'chart' ? 'bg-primary text-white' : 'bg-white text-gray-700'} text-xs font-medium hover:bg-gray-50 focus:z-10 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary`}
-                onClick={() => setViewMode('chart')}
-              >
-                Chart
-              </button>
-              <button 
-                type="button" 
-                className={`relative inline-flex items-center px-3 py-1.5 rounded-r-md border border-gray-300 ${viewMode === 'table' ? 'bg-primary text-white' : 'bg-white text-gray-700'} text-xs font-medium hover:bg-gray-50 focus:z-10 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary`}
-                onClick={() => setViewMode('table')}
-              >
-                Table
-              </button>
-            </div>
-          </div>
 
-          {candidates.length === 0 ? (
-            <div className="flex justify-center items-center h-64">
-              <p className="text-gray-500">No candidates available</p>
+        {electionData.isActive && candidates.length > 0 && (
+          <div className="flex-1 lg:border-l lg:pl-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-medium text-gray-900">Real-time Results</h3>
+              <div className="inline-flex shadow-sm rounded-md">
+                <button 
+                  type="button" 
+                  className={`relative inline-flex items-center px-3 py-1.5 rounded-l-md border border-gray-300 ${viewMode === 'chart' ? 'bg-primary text-white' : 'bg-white text-gray-700'} text-xs font-medium hover:bg-gray-50 focus:z-10 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary`}
+                  onClick={() => setViewMode('chart')}
+                >
+                  Chart
+                </button>
+                <button 
+                  type="button" 
+                  className={`relative inline-flex items-center px-3 py-1.5 rounded-r-md border border-gray-300 ${viewMode === 'table' ? 'bg-primary text-white' : 'bg-white text-gray-700'} text-xs font-medium hover:bg-gray-50 focus:z-10 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary`}
+                  onClick={() => setViewMode('table')}
+                >
+                  Table
+                </button>
+              </div>
             </div>
-          ) : viewMode === 'chart' ? (
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={candidates}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius="60%"
-                    outerRadius="80%"
-                    paddingAngle={0}
-                    dataKey="percentage"
-                    nameKey="name"
-                  >
-                    {candidates.map((entry, index) => (
-                      <Cell 
-                        key={`cell-${index}`} 
-                        fill={candidateColors[index % candidateColors.length]} 
-                      />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    formatter={(value) => [`${value}%`, '']}
-                    labelFormatter={(name) => `${name}`}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          ) : (
-            <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 sm:rounded-lg mb-4">
-              <table className="min-w-full divide-y divide-gray-300">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th scope="col" className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6">Candidate</th>
-                    <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Party</th>
-                    <th scope="col" className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">Votes</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 bg-white">
-                  {candidates.map((candidate, index) => (
-                    <tr key={index}>
-                      <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-6">{candidate.name}</td>
-                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">{candidate.party}</td>
-                      <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-gray-500">{candidate.votes} ({candidate.percentage}%)</td>
+
+            {viewMode === 'chart' ? (
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={candidates}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius="60%"
+                      outerRadius="80%"
+                      paddingAngle={0}
+                      dataKey="percentage"
+                      nameKey="name"
+                    >
+                      {candidates.map((entry, index) => (
+                        <Cell 
+                          key={`cell-${index}`} 
+                          fill={candidateColors[index % candidateColors.length]} 
+                        />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(value) => [`${value}%`, '']}
+                      labelFormatter={(name) => `${name}`}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 sm:rounded-lg mb-4">
+                <table className="min-w-full divide-y divide-gray-300">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th scope="col" className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6">Candidate</th>
+                      <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Party</th>
+                      <th scope="col" className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">Votes</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 bg-white">
+                    {candidates.map((candidate, index) => (
+                      <tr key={index}>
+                        <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-6">{candidate.name}</td>
+                        <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">{candidate.party}</td>
+                        <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-gray-500">{candidate.votes} ({candidate.percentage}%)</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
 
-          {viewMode === 'chart' && candidates.length > 0 && (
-            <div className="mt-4 space-y-3">
-              {candidates.map((candidate, index) => (
-                <div className="flex items-center" key={index}>
-                  <div 
-                    className="w-4 h-4 rounded-full mr-2" 
-                    style={{ backgroundColor: candidateColors[index % candidateColors.length] }}
-                  ></div>
-                  <div className="flex-1">
-                    <div className="flex justify-between">
-                      <span className="text-sm font-medium text-gray-900">{candidate.name}</span>
-                      <span className="text-sm text-gray-500">{candidate.percentage}%</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
-                      <div 
-                        className="h-1.5 rounded-full" 
-                        style={{ 
-                          width: `${candidate.percentage}%`,
-                          backgroundColor: candidateColors[index % candidateColors.length]
-                        }}
-                      ></div>
+            {viewMode === 'chart' && (
+              <div className="mt-4 space-y-3">
+                {candidates.map((candidate, index) => (
+                  <div className="flex items-center" key={index}>
+                    <div 
+                      className="w-4 h-4 rounded-full mr-2" 
+                      style={{ backgroundColor: candidateColors[index % candidateColors.length] }}
+                    ></div>
+                    <div className="flex-1">
+                      <div className="flex justify-between">
+                        <span className="text-sm font-medium text-gray-900">{candidate.name}</span>
+                        <span className="text-sm text-gray-500">{candidate.percentage}%</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                        <div 
+                          className="h-1.5 rounded-full" 
+                          style={{ 
+                            width: `${candidate.percentage}%`,
+                            backgroundColor: candidateColors[index % candidateColors.length]
+                          }}
+                        ></div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </Card>
   );
