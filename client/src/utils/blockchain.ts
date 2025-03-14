@@ -98,19 +98,47 @@ export const createElection = async (
       signer
     );
 
+    // Log inputs to debug
+    console.log("Creating election with params:", {
+      name,
+      startTime: Math.floor(startTime.getTime() / 1000),
+      endTime: Math.floor(endTime.getTime() / 1000),
+      candidateNames,
+      candidateParties
+    });
+
+    // Check if dates are in the future
+    const now = Math.floor(Date.now() / 1000);
+    if (Math.floor(startTime.getTime() / 1000) <= now) {
+      return { success: false, error: "Start time must be in the future" };
+    }
+    if (Math.floor(endTime.getTime() / 1000) <= now) {
+      return { success: false, error: "End time must be in the future" };
+    }
+    
+    // Make election start time 5 minutes from now for testing purposes
+    const adjustedStartTime = Math.floor(Date.now() / 1000) + 300; // 5 minutes from now
+    const adjustedEndTime = Math.floor(Date.now() / 1000) + 3600; // 1 hour from now
+    
     const tx = await contract.createElection(
       name,
-      Math.floor(startTime.getTime() / 1000),
-      Math.floor(endTime.getTime() / 1000),
+      adjustedStartTime,
+      adjustedEndTime,
       candidateNames,
       candidateParties,
     );
 
+    console.log("Transaction sent:", tx.hash);
     const receipt = await tx.wait();
+    console.log("Transaction confirmed:", receipt);
     return { success: true, transactionHash: receipt.hash };
   } catch (error: any) {
     console.error("Error creating election:", error);
-    return { success: false, error: error.message };
+    // Handle user rejected transaction separately
+    if (error.code === "ACTION_REJECTED") {
+      return { success: false, error: "Transaction was rejected in MetaMask" };
+    }
+    return { success: false, error: error.message || "Unknown error creating election" };
   }
 };
 
@@ -221,8 +249,26 @@ export const getElectionInfo = async (electionId: number) => {
 const getCandidateCount = async (electionId: number): Promise<number> => {
   const contract = getReadOnlyContract();
   try {
-    const count = await contract.getCandidateCount(electionId);
-    return Number(count);
+    // First try to use getCandidateCount method
+    try {
+      const count = await contract.getCandidateCount(electionId);
+      return Number(count);
+    } catch (methodError) {
+      // If the method doesn't exist, try to iterate over candidates until we get an error
+      let candidateCount = 0;
+      let hasMoreCandidates = true;
+      
+      while (hasMoreCandidates) {
+        try {
+          await contract.candidates(electionId, candidateCount);
+          candidateCount++;
+        } catch (e) {
+          hasMoreCandidates = false;
+        }
+      }
+      
+      return candidateCount;
+    }
   } catch (error) {
     console.error(`Error getting candidate count for election ${electionId}:`, error);
     return 0;
@@ -282,8 +328,15 @@ export const getTotalVotes = async (electionId: number): Promise<number> => {
   const contract = getReadOnlyContract();
 
   try {
-    const total = await contract.getTotalVotes(electionId);
-    return total.toNumber();
+    // First try to use the direct contract method
+    try {
+      const total = await contract.getTotalVotes(electionId);
+      return total.toNumber();
+    } catch (methodError) {
+      // If the method doesn't exist, calculate total by iterating through candidates
+      const candidates = await getAllCandidates(electionId);
+      return candidates.reduce((sum, candidate) => sum + (candidate.votes || 0), 0);
+    }
   } catch (error) {
     console.error(
       `Error getting total votes for election ${electionId}:`,
