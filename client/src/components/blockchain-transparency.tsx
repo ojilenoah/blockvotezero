@@ -44,7 +44,7 @@ export function BlockchainTransparency() {
                   <div className="w-20 text-xs font-medium text-gray-500">Network</div>
                   <div className="flex-1 text-xs text-gray-900">
                     {chainId ? (
-                      chainId === "0x13881" ? "Polygon Mumbai Testnet" : "Polygon Network"
+                      chainId === "0x13881" ? "Polygon Amoy Testnet" : "Polygon Network"
                     ) : (
                       "Unknown Network"
                     )}
