@@ -51,28 +51,17 @@ const getReadOnlyContract = (): ethers.Contract => {
   return new ethers.Contract(CONTRACT_ADDRESS, VotingSystemABI.abi, provider);
 };
 
-// Initialize contract instance with signer for write operations
-const getSignedContract = (privateKey: string): ethers.Contract => {
-  const provider = getProvider();
-  const wallet = new ethers.Wallet(privateKey, provider);
-  return new ethers.Contract(CONTRACT_ADDRESS, VotingSystemABI.abi, wallet);
-};
-
 // Admin Operations
 export const isAdmin = async (address: string): Promise<boolean> => {
-  const contract = getReadOnlyContract();
-  const admin = await contract.admin();
-  return admin.toLowerCase() === address.toLowerCase();
-};
-
-// Get address from private key
-export const getAddressFromPrivateKey = (privateKey: string): string | null => {
   try {
-    const wallet = new ethers.Wallet(privateKey);
-    return wallet.address;
+    const contract = getReadOnlyContract();
+    console.log("Checking admin status for address:", address);
+    const admin = await contract.admin();
+    console.log("Contract admin address:", admin);
+    return admin.toLowerCase() === address.toLowerCase();
   } catch (error) {
-    console.error("Invalid private key:", error);
-    return null;
+    console.error("Error checking admin status:", error);
+    return false;
   }
 };
 
@@ -84,43 +73,111 @@ export const createElection = async (
   candidateNames: string[],
   candidateParties: string[],
 ): Promise<TransactionResult> => {
+  console.log("Starting election creation process...");
+
   if (!window.ethereum) {
+    console.error("MetaMask not found");
     return { success: false, error: "MetaMask is not installed!" };
   }
 
   try {
+    console.log("Requesting MetaMask account access...");
     await window.ethereum.request({ method: "eth_requestAccounts" });
     const provider = new ethers.BrowserProvider(window.ethereum);
     const signer = await provider.getSigner();
+    console.log("Connected with address:", await signer.getAddress());
+
+    // Check admin status
+    const signerAddress = await signer.getAddress();
+    console.log("Checking admin status for:", signerAddress);
+    const isAdminUser = await isAdmin(signerAddress);
+    console.log("Is admin?", isAdminUser);
+
+    if (!isAdminUser) {
+      return { success: false, error: "Only admin can create elections" };
+    }
+
     const contract = new ethers.Contract(
       CONTRACT_ADDRESS,
       VotingSystemABI.abi,
       signer,
     );
 
+    // Input validation
+    if (!name || name.trim() === "") {
+      return { success: false, error: "Election name is required" };
+    }
+
+    if (candidateNames.length === 0 || candidateParties.length === 0) {
+      return { success: false, error: "At least one candidate is required" };
+    }
+
+    if (candidateNames.length !== candidateParties.length) {
+      return {
+        success: false,
+        error: "Candidate names and parties count mismatch",
+      };
+    }
+
+    // Convert dates to Unix timestamps
+    const startTimeUnix = Math.floor(startTime.getTime() / 1000);
+    const endTimeUnix = Math.floor(endTime.getTime() / 1000);
+    const now = Math.floor(Date.now() / 1000);
+
+    console.log("Timestamps:", {
+      now,
+      startTimeUnix,
+      endTimeUnix,
+      startTime: startTime.toISOString(),
+      endTime: endTime.toISOString(),
+    });
+
+    if (startTimeUnix <= now) {
+      return { success: false, error: "Start time must be in the future" };
+    }
+
+    if (endTimeUnix <= startTimeUnix) {
+      return { success: false, error: "End time must be after start time" };
+    }
+
+    console.log("Creating election with params:", {
+      name,
+      startTimeUnix,
+      endTimeUnix,
+      candidateNames,
+      candidateParties,
+    });
+
     const tx = await contract.createElection(
       name,
-      Math.floor(startTime.getTime() / 1000),
-      Math.floor(endTime.getTime() / 1000),
+      startTimeUnix,
+      endTimeUnix,
       candidateNames,
       candidateParties,
     );
 
+    console.log("Transaction sent:", tx.hash);
+    console.log("Waiting for transaction confirmation...");
+
     const receipt = await tx.wait();
+    console.log("Transaction receipt:", receipt);
+
     if (!receipt) {
-      throw new Error("Transaction failed");
+      throw new Error("Transaction failed - no receipt received");
     }
 
     const block = await provider.getBlock(receipt.blockNumber);
-    if (!block || !receipt) {
-      throw new Error("Failed to get transaction details");
+    if (!block) {
+      throw new Error("Failed to get block details");
     }
+
+    console.log("Block details:", block);
 
     const txData: Transaction = {
       hash: receipt.hash,
-      timestamp: new Date((block.timestamp || Math.floor(Date.now() / 1000)) * 1000),
-      from: receipt.from || "",
-      to: receipt.to || "",
+      timestamp: new Date(block.timestamp * 1000),
+      from: receipt.from,
+      to: receipt.to,
       method: "createElection",
       value: "0",
       blockNumber: receipt.blockNumber,
@@ -129,9 +186,12 @@ export const createElection = async (
 
     localStorage.setItem("lastElectionCreationTx", JSON.stringify(txData));
 
+    // Get the election ID
     const electionId = await contract.currentElectionId();
     const electionIdNumber = Number(electionId);
+    console.log("New election created with ID:", electionIdNumber);
 
+    // Store candidate information
     const candidateObjects = candidateNames.map((name, index) => ({
       name,
       party: candidateParties[index],
@@ -154,15 +214,37 @@ export const createElection = async (
     };
   } catch (error: any) {
     console.error("Error creating election:", error);
+
+    // Handle specific error cases
     if (error.code === "ACTION_REJECTED") {
       return { success: false, error: "Transaction was rejected in MetaMask" };
     }
+
+    if (error.message.includes("execution reverted")) {
+      return { 
+        success: false, 
+        error: "Contract execution failed - make sure you have admin rights and check the parameters"
+      };
+    }
+
     return {
       success: false,
-      error: error.message || "Unknown error creating election",
+      error: `Error creating election: ${error.message || "Unknown error"}`,
     };
   }
 };
+
+// Get address from private key
+export const getAddressFromPrivateKey = (privateKey: string): string | null => {
+  try {
+    const wallet = new ethers.Wallet(privateKey);
+    return wallet.address;
+  } catch (error) {
+    console.error("Invalid private key:", error);
+    return null;
+  }
+};
+
 
 // Cast a vote
 export const castVote = async (
