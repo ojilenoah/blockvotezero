@@ -4,11 +4,13 @@ import { Button } from "@/components/ui/button";
 import { candidateColors } from "@/data/mock-data";
 
 export interface Candidate {
-  id: number;
+  id?: number;
+  index?: number;
   name: string;
   party: string;
-  profileImage: string;
-  biography: string;
+  votes?: number;
+  profileImage?: string;
+  biography?: string;
 }
 
 interface CandidateGridProps {
@@ -26,9 +28,9 @@ export function CandidateGrid({
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
       {candidates.map((candidate, index) => (
         <CandidateCard 
-          key={candidate.id} 
+          key={candidate.id || candidate.index} 
           candidate={candidate} 
-          selected={selectedCandidateId === candidate.id}
+          selected={selectedCandidateId === (candidate.id || candidate.index)}
           colorIndex={index % candidateColors.length}
           onSelect={() => onSelectCandidate(candidate)}
         />

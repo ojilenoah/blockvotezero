@@ -2,10 +2,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 
 interface UserInfoCardProps {
   userInfo: {
-    name: string;
+    name?: string;
     nin: string;
-    registrationDate: string;
-    votingDistrict: string;
+    registrationDate?: string;
+    votingDistrict?: string;
   };
 }
 
