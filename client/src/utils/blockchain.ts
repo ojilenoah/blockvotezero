@@ -3,29 +3,46 @@ import { ethers } from "ethers";
 import VotingSystemABI from "../contracts/VotingSystem.json";
 import { Candidate } from "../types/candidate";
 
-// Contract address - using the proxy address
-export const CONTRACT_ADDRESS = "0xc0895D39fBBD1918067d5Fa41beDAF51d36665B5";
+// Contract address from deployment (update with your actual deployed contract address)
+export const CONTRACT_ADDRESS = '0xc0895D39fBBD1918067d5Fa41beDAF51d36665B5';
 
 // Alchemy provider URL
-export const ALCHEMY_URL = "https://polygon-amoy.g.alchemy.com/v2/E822ZzOp7UFQy6Zt82uF4hzcdklL-qoe";
+export const ALCHEMY_URL = 'https://polygon-amoy.g.alchemy.com/v2/E822ZzOp7UFQy6Zt82uF4hzcdklL-qoe';
 
 // Types for blockchain interactions
-interface ElectionInfo {
+export interface ElectionInfo {
   name: string;
   startTime: Date;
   endTime: Date;
   active: boolean;
-  upcoming: boolean;
   candidateCount: number;
 }
 
+export interface Transaction {
+  hash: string;
+  timestamp: Date;
+  from: string;
+  to: string;
+  value: string;
+  method: string;
+  blockNumber: number;
+  status: string;
+}
+
+export interface TransactionResult {
+  success: boolean;
+  transactionHash?: string;
+  error?: string;
+  electionId?: number;
+}
+
 // Initialize ethers provider
-const getProvider = (): ethers.JsonRpcProvider => {
+const getProvider = () => {
   return new ethers.JsonRpcProvider(ALCHEMY_URL);
 };
 
 // Initialize contract instance for read-only operations
-const getReadOnlyContract = (): ethers.Contract => {
+const getReadOnlyContract = () => {
   const provider = getProvider();
   return new ethers.Contract(CONTRACT_ADDRESS, VotingSystemABI.abi, provider);
 };
@@ -33,60 +50,9 @@ const getReadOnlyContract = (): ethers.Contract => {
 // Get active election ID
 export const getActiveElectionId = async (): Promise<number> => {
   const contract = getReadOnlyContract();
-
   try {
-    console.log("Getting active election ID...");
     const currentId = await contract.currentElectionId();
-    console.log("Current election ID:", currentId.toString());
-
-    if (currentId > 0) {
-      try {
-        const info = await contract.electionInfo(currentId);
-        console.log("Raw election info:", info);
-
-        if (info && info.exists) {
-          const now = Math.floor(Date.now() / 1000);
-          const startTime = Number(info.startTime);
-          const endTime = Number(info.endTime);
-
-          console.log("Checking election times:", {
-            now,
-            startTime,
-            endTime,
-            active: now >= startTime && now <= endTime
-          });
-
-          if (now >= startTime && now <= endTime) {
-            console.log(`Found active election: ${currentId}`);
-            return Number(currentId);
-          }
-        }
-      } catch (error) {
-        console.error("Error checking current election:", error);
-      }
-
-      // If current election is not active, check recent ones
-      for (let id = Number(currentId); id > Math.max(1, Number(currentId) - 5); id--) {
-        try {
-          const info = await contract.electionInfo(id);
-          if (!info || !info.exists) continue;
-
-          const now = Math.floor(Date.now() / 1000);
-          const startTime = Number(info.startTime);
-          const endTime = Number(info.endTime);
-
-          if (now >= startTime && now <= endTime) {
-            console.log(`Found active election: ${id}`);
-            return id;
-          }
-        } catch (error) {
-          console.error(`Error checking election ${id}:`, error);
-        }
-      }
-    }
-
-    console.log("No active election found");
-    return 0;
+    return Number(currentId);
   } catch (error) {
     console.error("Error getting active election ID:", error);
     return 0;
@@ -96,39 +62,15 @@ export const getActiveElectionId = async (): Promise<number> => {
 // Get election info
 export const getElectionInfo = async (electionId: number): Promise<ElectionInfo | null> => {
   const contract = getReadOnlyContract();
-
   try {
-    console.log(`Getting election info for ID ${electionId}`);
-    const info = await contract.electionInfo(electionId);
-    console.log("Raw election info response:", info);
-
-    if (!info || !info.exists) {
-      console.log(`No election found for ID ${electionId}`);
-      return null;
-    }
-
-    const now = Math.floor(Date.now() / 1000);
-    const startTime = Number(info.startTime);
-    const endTime = Number(info.endTime);
-    const active = now >= startTime && now <= endTime;
-    const upcoming = now < startTime;
-
-    console.log("Processed election data:", {
-      name: info.name,
-      startTime,
-      endTime,
-      now,
-      active,
-      upcoming,
-      candidateCount: Number(info.candidateCount)
-    });
+    const info = await contract.getElectionInfo(electionId);
+    if (!info) return null;
 
     return {
       name: info.name,
-      startTime: new Date(startTime * 1000),
-      endTime: new Date(endTime * 1000),
-      active,
-      upcoming,
+      startTime: new Date(Number(info.startTime) * 1000),
+      endTime: new Date(Number(info.endTime) * 1000),
+      active: info.active,
       candidateCount: Number(info.candidateCount)
     };
   } catch (error) {
@@ -140,17 +82,13 @@ export const getElectionInfo = async (electionId: number): Promise<ElectionInfo 
 // Get all candidates for an election
 export const getAllCandidates = async (electionId: number): Promise<Candidate[]> => {
   const contract = getReadOnlyContract();
-
   try {
-    console.log(`Getting candidates for election ${electionId}`);
     const result = await contract.getAllCandidates(electionId);
-    console.log("Candidates response:", result);
-
     return result.names.map((name: string, i: number) => ({
       name,
       party: result.parties[i],
       votes: Number(result.votesCounts[i]),
-      index: i,
+      index: i
     }));
   } catch (error) {
     console.error(`Error getting candidates for election ${electionId}:`, error);
@@ -161,9 +99,7 @@ export const getAllCandidates = async (electionId: number): Promise<Candidate[]>
 // Get total votes in an election
 export const getTotalVotes = async (electionId: number): Promise<number> => {
   const contract = getReadOnlyContract();
-
   try {
-    console.log(`Getting total votes for election ${electionId}`);
     const total = await contract.getTotalVotes(electionId);
     return Number(total);
   } catch (error) {
@@ -172,14 +108,55 @@ export const getTotalVotes = async (electionId: number): Promise<number> => {
   }
 };
 
+// Cast a vote
+export const castVote = async (
+  electionId: number,
+  candidateIndex: number,
+  voterNINHash: string
+): Promise<TransactionResult> => {
+  if (!window.ethereum) {
+    return { success: false, error: "MetaMask is not installed!" };
+  }
+
+  try {
+    await window.ethereum.request({ method: "eth_requestAccounts" });
+    const provider = new ethers.BrowserProvider(window.ethereum);
+    const signer = await provider.getSigner();
+    const contract = new ethers.Contract(CONTRACT_ADDRESS, VotingSystemABI.abi, signer);
+
+    const tx = await contract.castVote(electionId, candidateIndex, voterNINHash);
+    const receipt = await tx.wait();
+
+    return { 
+      success: true, 
+      transactionHash: receipt.hash,
+      electionId: electionId
+    };
+  } catch (error: any) {
+    console.error("Error casting vote:", error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Admin Operations
+export const isAdmin = async (address: string): Promise<boolean> => {
+  try {
+    const contract = getReadOnlyContract();
+    const admin = await contract.admin();
+    return admin.toLowerCase() === address.toLowerCase();
+  } catch (error) {
+    console.error("Error checking admin status:", error);
+    return false;
+  }
+};
+
 // Helper function to generate SHA-256 hash of NIN
 export const hashNIN = async (nin: string): Promise<string> => {
   const encoder = new TextEncoder();
   const data = encoder.encode(nin);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex =
-    "0x" + hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+  const hashHex = '0x' + hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
   return hashHex;
 };
 
@@ -288,27 +265,6 @@ export const getContractTransactions = async (): Promise<Transaction[]> => {
   }
 };
 
-
-interface TransactionResult {
-  success: boolean;
-  transactionHash?: string;
-  error?: string;
-  electionId?: number;
-  from?: string;
-  to?: string;
-  blockNumber?: number;
-}
-
-interface Transaction {
-  hash: string;
-  timestamp: Date;
-  from: string;
-  to: string;
-  value: string;
-  method: string;
-  blockNumber: number;
-  status: string;
-}
 
 // Create an election
 export const createElection = async (
@@ -485,83 +441,5 @@ export const createElection = async (
       success: false,
       error: `Error creating election: ${error.message || "Unknown error"}`,
     };
-  }
-};
-
-// Cast a vote
-export const castVote = async (
-  electionId: number,
-  candidateIndex: number,
-  voterNINHash: string,
-): Promise<TransactionResult> => {
-  if (!window.ethereum) {
-    return { success: false, error: "MetaMask is not installed!" };
-  }
-
-  try {
-    await window.ethereum.request({ method: "eth_requestAccounts" });
-    const provider = new ethers.BrowserProvider(window.ethereum);
-    const signer = await provider.getSigner();
-    const contract = new ethers.Contract(
-      CONTRACT_ADDRESS,
-      VotingSystemABI.abi,
-      signer,
-    );
-
-    const tx = await contract.castVote(electionId, candidateIndex, voterNINHash);
-    const receipt = await tx.wait();
-    if (!receipt) {
-      throw new Error("Transaction failed");
-    }
-
-    const block = await provider.getBlock(receipt.blockNumber);
-    if (!block) {
-      throw new Error("Failed to get block details");
-    }
-
-    const txData: Transaction = {
-      hash: receipt.hash,
-      timestamp: new Date(block.timestamp * 1000),
-      from: receipt.from || "",
-      to: receipt.to || "",
-      method: "castVote",
-      value: "0",
-      blockNumber: receipt.blockNumber,
-      status: receipt.status === 1 ? "Confirmed" : "Failed",
-    };
-
-    localStorage.setItem("lastVoteCastTx", JSON.stringify(txData));
-
-    // Update cached vote count
-    try {
-      const candidates = await getAllCandidates(electionId);
-      localStorage.setItem(
-        `election_${electionId}_candidates`,
-        JSON.stringify(candidates),
-      );
-    } catch (e) {
-      console.error("Error updating cached candidates after vote:", e);
-    }
-
-    return { success: true, transactionHash: receipt.hash };
-  } catch (error: any) {
-    console.error("Error casting vote:", error);
-    return { success: false, error: error.message };
-  }
-};
-
-// Admin Operations
-export const isAdmin = async (address: string): Promise<boolean> => {
-  try {
-    console.log("Checking admin status for address:", address);
-    const contract = getReadOnlyContract();
-    const admin = await contract.admin();
-    console.log("Contract admin address:", admin);
-    const isMatch = admin.toLowerCase() === address.toLowerCase();
-    console.log("Is admin match?", isMatch);
-    return isMatch;
-  } catch (error) {
-    console.error("Error checking admin status:", error);
-    return false;
   }
 };

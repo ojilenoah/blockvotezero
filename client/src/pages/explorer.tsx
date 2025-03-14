@@ -1,18 +1,18 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  getActiveElectionId, 
-  getElectionInfo, 
-  getAllCandidates, 
-  getTotalVotes, 
+import {
+  getActiveElectionId,
+  getElectionInfo,
+  getAllCandidates,
+  getTotalVotes,
   CONTRACT_ADDRESS,
-  getContractTransactions,
-  Transaction as BlockchainTransaction 
+  type Transaction
 } from "@/utils/blockchain";
 import { useMetaMask } from "@/hooks/use-metamask";
 import { useToast } from "@/hooks/use-toast";
@@ -26,40 +26,86 @@ interface Election {
   totalVotes: number;
 }
 
-interface Transaction {
-  hash: string;
-  timestamp: Date;
-  status: string;
-  blockNumber: number;
-  method?: string;
-  from?: string;
-  to?: string;
-}
-
 export default function Explorer() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
-  const [elections, setElections] = useState<Election[]>([]);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loadingElections, setLoadingElections] = useState(true);
-  const [loadingTransactions, setLoadingTransactions] = useState(true);
-  const [statistics, setStatistics] = useState({
-    totalElections: 0,
-    totalVotes: 0,
-    activeElections: 0,
-    completedElections: 0,
-    upcomingElections: 0,
-    currentElectionId: 0
-  });
   const { chainId } = useMetaMask();
   const { toast } = useToast();
+
+  // Query for getting elections data
+  const { data: electionData, isLoading: loadingElections } = useQuery({
+    queryKey: ['elections'],
+    queryFn: async () => {
+      const currentElectionId = await getActiveElectionId();
+      const electionList: Election[] = [];
+      let totalVotesCount = 0;
+
+      // Lookup up to the first 10 possible election IDs
+      const maxElectionsToFetch = 10;
+
+      for (let id = 1; id <= Math.max(currentElectionId, maxElectionsToFetch); id++) {
+        try {
+          const electionInfo = await getElectionInfo(id);
+
+          if (electionInfo && electionInfo.name) {
+            const now = new Date();
+            const startTime = electionInfo.startTime;
+            const endTime = electionInfo.endTime;
+            let status: "Active" | "Upcoming" | "Completed" = "Completed";
+
+            if (now < startTime) {
+              status = "Upcoming";
+            } else if (now >= startTime && now <= endTime) {
+              status = "Active";
+            }
+
+            const votes = await getTotalVotes(id);
+            totalVotesCount += votes;
+
+            electionList.push({
+              id,
+              name: electionInfo.name,
+              startTime,
+              endTime,
+              status,
+              totalVotes: votes
+            });
+          }
+        } catch (err) {
+          console.error(`Error fetching election ${id}:`, err);
+        }
+      }
+
+      // Sort elections
+      return {
+        elections: electionList.sort((a, b) => {
+          if (a.status !== b.status) {
+            const statusOrder = { Active: 0, Upcoming: 1, Completed: 2 };
+            return statusOrder[a.status] - statusOrder[b.status];
+          }
+          return a.status === "Completed"
+            ? b.endTime.getTime() - a.endTime.getTime()
+            : a.startTime.getTime() - b.startTime.getTime();
+        }),
+        statistics: {
+          totalElections: electionList.length,
+          totalVotes: totalVotesCount,
+          activeElections: electionList.filter(e => e.status === "Active").length,
+          completedElections: electionList.filter(e => e.status === "Completed").length,
+          upcomingElections: electionList.filter(e => e.status === "Upcoming").length,
+          currentElectionId: currentElectionId
+        }
+      };
+    },
+    staleTime: 30000, // Consider data fresh for 30 seconds
+    refetchInterval: 60000, // Only refetch every minute
+  });
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (!searchQuery.trim()) return;
-    
+
     setIsSearching(true);
-    // In a real implementation, this would search the blockchain
     setTimeout(() => {
       setIsSearching(false);
       toast({
@@ -69,126 +115,6 @@ export default function Explorer() {
       });
     }, 1000);
   };
-
-  useEffect(() => {
-    const fetchElections = async () => {
-      setLoadingElections(true);
-      try {
-        const currentElectionId = await getActiveElectionId();
-        const electionList: Election[] = [];
-        let totalVotesCount = 0;
-        
-        // Lookup up to the first 10 possible election IDs
-        const maxElectionsToFetch = 10;
-        
-        for (let id = 1; id <= Math.max(currentElectionId, maxElectionsToFetch); id++) {
-          try {
-            const electionInfo = await getElectionInfo(id);
-            
-            if (electionInfo && electionInfo.name) {
-              const now = new Date();
-              const startTime = new Date(electionInfo.startTime);
-              const endTime = new Date(electionInfo.endTime);
-              let status: "Active" | "Upcoming" | "Completed" = "Completed";
-              
-              if (now < startTime) {
-                status = "Upcoming";
-              } else if (now >= startTime && now <= endTime) {
-                status = "Active";
-              }
-              
-              const votes = await getTotalVotes(id);
-              totalVotesCount += votes;
-              
-              electionList.push({
-                id,
-                name: electionInfo.name,
-                startTime,
-                endTime,
-                status,
-                totalVotes: votes
-              });
-            }
-          } catch (err) {
-            console.error(`Error fetching election ${id}:`, err);
-          }
-        }
-        
-        // Sort elections: Active first, then Upcoming, then Completed (most recent first)
-        electionList.sort((a, b) => {
-          if (a.status !== b.status) {
-            const statusOrder = { Active: 0, Upcoming: 1, Completed: 2 };
-            return statusOrder[a.status] - statusOrder[b.status];
-          }
-          
-          // If same status, sort by date (most recent first for completed, soonest first for upcoming)
-          if (a.status === "Completed") {
-            return b.endTime.getTime() - a.endTime.getTime();
-          } else {
-            return a.startTime.getTime() - b.startTime.getTime();
-          }
-        });
-        
-        setElections(electionList);
-        
-        // Update statistics
-        setStatistics({
-          totalElections: electionList.length,
-          totalVotes: totalVotesCount,
-          activeElections: electionList.filter(e => e.status === "Active").length,
-          completedElections: electionList.filter(e => e.status === "Completed").length,
-          upcomingElections: electionList.filter(e => e.status === "Upcoming").length,
-          currentElectionId
-        });
-      } catch (error) {
-        console.error("Error fetching elections:", error);
-        toast({
-          title: "Error",
-          description: "Failed to load blockchain data",
-          variant: "destructive"
-        });
-      } finally {
-        setLoadingElections(false);
-      }
-    };
-
-    fetchElections();
-  }, [toast]);
-  
-  // Fetch actual blockchain transactions using Alchemy API
-  useEffect(() => {
-    const fetchTransactions = async () => {
-      setLoadingTransactions(true);
-      try {
-        // Get transactions from the blockchain API
-        const blockchainTransactions = await getContractTransactions();
-        
-        // Map the returned blockchain transactions to our Transaction interface
-        const formattedTransactions: Transaction[] = blockchainTransactions.map(tx => ({
-          hash: tx.hash,
-          timestamp: tx.timestamp,
-          status: tx.status,
-          blockNumber: tx.blockNumber,
-          method: tx.method || "Contract Interaction",
-          from: tx.from,
-          to: tx.to
-        }));
-        
-        setTransactions(formattedTransactions);
-      } catch (error) {
-        console.error("Error fetching blockchain transactions:", error);
-        toast({
-          title: "Transaction Data Error",
-          description: "Could not load transaction data from the blockchain. Using estimated transactions instead.",
-          variant: "destructive"
-        });
-      } finally {
-        setLoadingTransactions(false);
-      }
-    };
-    
-    fetchTransactions();
-  }, [toast]);
 
   // Helper to get status badge based on election status
   const getStatusBadge = (status: string) => {
@@ -213,7 +139,7 @@ export default function Explorer() {
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
-      
+
       <main className="flex-grow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="mb-8">
@@ -243,184 +169,11 @@ export default function Explorer() {
             </CardContent>
           </Card>
 
-          <Tabs defaultValue="latest">
-            <TabsList className="grid w-full grid-cols-3 mb-6">
-              <TabsTrigger value="latest">Latest Transactions</TabsTrigger>
+          <Tabs defaultValue="elections">
+            <TabsList className="grid w-full grid-cols-2 mb-6">
               <TabsTrigger value="elections">Elections</TabsTrigger>
               <TabsTrigger value="statistics">Statistics</TabsTrigger>
             </TabsList>
-            
-            <TabsContent value="latest">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Contract Transactions</CardTitle>
-                  <p className="text-sm text-gray-500 mt-1">
-                    {transactions.length > 0 
-                      ? "Showing actual blockchain transactions from contract interactions" 
-                      : "No contract transactions found on the blockchain yet"}
-                  </p>
-                </CardHeader>
-                <CardContent>
-                  {loadingTransactions ? (
-                    <div className="text-center py-8">
-                      <p className="text-gray-500">Loading transactions from blockchain...</p>
-                    </div>
-                  ) : transactions.length > 0 ? (
-                    // Show real transactions if available
-                    <div className="space-y-4">
-                      {transactions.map((tx, index) => (
-                        <div key={tx.hash || index} className="border-b border-gray-200 pb-4 last:border-b-0 last:pb-0">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <p className="text-sm font-medium text-primary">
-                                {tx.method === "createElection" 
-                                  ? "Election Created" 
-                                  : tx.method === "castVote" 
-                                    ? "Vote Cast" 
-                                    : "Contract Interaction"}
-                              </p>
-                              <p className="text-sm font-mono text-gray-600 truncate max-w-xs sm:max-w-sm md:max-w-md">
-                                {tx.hash}
-                              </p>
-                              <div className="flex flex-col sm:flex-row sm:gap-4 text-xs text-gray-500 mt-1">
-                                <span>{tx.timestamp.toLocaleString()}</span>
-                                {tx.from && (
-                                  <span>From: {formatAddress(tx.from)}</span>
-                                )}
-                                {tx.to && (
-                                  <span>To: {formatAddress(tx.to)}</span>
-                                )}
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-sm font-medium text-green-600">{tx.status}</p>
-                              <p className="text-xs text-gray-500 mt-1">
-                                Method: {tx.method || "Contract Interaction"}
-                              </p>
-                              {tx.blockNumber && (
-                                <p className="text-xs text-gray-500">
-                                  Block: {tx.blockNumber}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-
-                      <div className="flex justify-center pt-4">
-                        <a 
-                          href={`https://www.oklink.com/amoy/address/${CONTRACT_ADDRESS}`}
-                          target="_blank"
-                          rel="noopener noreferrer" 
-                          className="text-primary hover:underline text-sm"
-                        >
-                          View all transactions on blockchain explorer →
-                        </a>
-                      </div>
-                    </div>
-                  ) : loadingElections ? (
-                    <div className="text-center py-8">
-                      <p className="text-gray-500">Loading election data...</p>
-                    </div>
-                  ) : elections.length === 0 ? (
-                    <div className="text-center py-8">
-                      <p className="text-gray-500">No transactions found</p>
-                    </div>
-                  ) : (
-                    // Fallback to generated transactions if API fails
-                    <div className="space-y-4">
-                      {/* Election Creation Transactions */}
-                      {elections.map((election) => (
-                        <div key={`create-${election.id}`} className="border-b border-gray-200 pb-4 last:border-b-0 last:pb-0">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <p className="text-sm font-medium text-primary">
-                                Election Created: {election.name}
-                              </p>
-                              <p className="text-sm font-mono text-gray-600 truncate max-w-xs sm:max-w-sm md:max-w-md">
-                                {/* Generate a deterministic hash-like ID based on election properties */}
-                                0x{Array.from(election.name + election.id).map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join('').substring(0, 16)}...
-                              </p>
-                              <p className="text-xs text-gray-500 mt-1">
-                                {new Date(election.startTime.getTime() - 86400000).toLocaleString()} {/* 1 day before start */}
-                              </p>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-sm font-medium text-green-600">Confirmed</p>
-                              <p className="text-xs text-gray-500 mt-1">
-                                Method: createElection()
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-
-                      {/* Vote Transactions - Create multiple votes per completed election */}
-                      {elections
-                        .filter(election => election.status === "Completed" || election.status === "Active")
-                        .flatMap(election => {
-                          // Create a number of vote transactions based on total votes
-                          // Limit to max 5 transactions per election for display purposes
-                          const voteCount = Math.min(election.totalVotes, 5);
-                          return Array.from({ length: voteCount }).map((_, index) => {
-                            // Distribute votes over the election period
-                            const startTime = election.startTime.getTime();
-                            const endTime = Math.min(election.endTime.getTime(), Date.now());
-                            const timeRange = endTime - startTime;
-                            const voteTime = new Date(startTime + (timeRange * (index / voteCount)));
-                            
-                            return {
-                              id: `vote-${election.id}-${index}`,
-                              electionId: election.id,
-                              electionName: election.name,
-                              timestamp: voteTime,
-                              hash: `0x${Array.from(`vote-${election.id}-${index}`).map(c => c.charCodeAt(0).toString(16)).join('').substring(0, 16)}`,
-                              candidateIndex: index % 3 // Pretend there are 3 candidates max
-                            };
-                          });
-                        })
-                        .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()) // Sort by timestamp, newest first
-                        .slice(0, 10) // Limit to 10 most recent
-                        .map(vote => (
-                          <div key={vote.id} className="border-b border-gray-200 pb-4 last:border-b-0 last:pb-0">
-                            <div className="flex justify-between items-start">
-                              <div>
-                                <p className="text-sm font-medium text-primary">
-                                  Vote Cast: Election {vote.electionId}
-                                </p>
-                                <p className="text-sm font-mono text-gray-600 truncate max-w-xs sm:max-w-sm md:max-w-md">
-                                  {vote.hash}...
-                                </p>
-                                <p className="text-xs text-gray-500 mt-1">
-                                  {vote.timestamp.toLocaleString()}
-                                </p>
-                              </div>
-                              <div className="text-right">
-                                <p className="text-sm font-medium text-green-600">Confirmed</p>
-                                <p className="text-xs text-gray-500 mt-1">
-                                  Method: castVote()
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        ))
-                      }
-
-                      <div className="flex justify-center pt-4">
-                        <a 
-                          href={`https://www.oklink.com/amoy/address/${CONTRACT_ADDRESS}`}
-                          target="_blank"
-                          rel="noopener noreferrer" 
-                          className="text-primary hover:underline text-sm"
-                        >
-                          View all transactions on blockchain explorer →
-                        </a>
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
 
             <TabsContent value="elections">
               <Card>
@@ -432,13 +185,13 @@ export default function Explorer() {
                     <div className="text-center py-8">
                       <p className="text-gray-500">Loading elections from blockchain...</p>
                     </div>
-                  ) : elections.length === 0 ? (
+                  ) : !electionData?.elections.length ? (
                     <div className="text-center py-8">
                       <p className="text-gray-500">No elections found on the blockchain</p>
                     </div>
                   ) : (
                     <div className="divide-y divide-gray-200">
-                      {elections.map((election) => (
+                      {electionData.elections.map((election) => (
                         <div className="py-4" key={election.id}>
                           <h3 className="text-lg font-medium">{election.name}</h3>
                           <p className="text-sm text-gray-500">
@@ -478,27 +231,27 @@ export default function Explorer() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
                       <div className="bg-white p-4 rounded-lg border border-gray-200">
                         <p className="text-sm font-medium text-gray-500">Total Elections</p>
-                        <p className="text-3xl font-bold mt-1">{statistics.totalElections}</p>
+                        <p className="text-3xl font-bold mt-1">{electionData?.statistics.totalElections}</p>
                       </div>
                       <div className="bg-white p-4 rounded-lg border border-gray-200">
                         <p className="text-sm font-medium text-gray-500">Total Votes Cast</p>
-                        <p className="text-3xl font-bold mt-1">{statistics.totalVotes}</p>
+                        <p className="text-3xl font-bold mt-1">{electionData?.statistics.totalVotes}</p>
                       </div>
                       <div className="bg-white p-4 rounded-lg border border-gray-200">
                         <p className="text-sm font-medium text-gray-500">Active Elections</p>
-                        <p className="text-3xl font-bold mt-1">{statistics.activeElections}</p>
+                        <p className="text-3xl font-bold mt-1">{electionData?.statistics.activeElections}</p>
                       </div>
                       <div className="bg-white p-4 rounded-lg border border-gray-200">
                         <p className="text-sm font-medium text-gray-500">Completed Elections</p>
-                        <p className="text-3xl font-bold mt-1">{statistics.completedElections}</p>
+                        <p className="text-3xl font-bold mt-1">{electionData?.statistics.completedElections}</p>
                       </div>
                       <div className="bg-white p-4 rounded-lg border border-gray-200">
                         <p className="text-sm font-medium text-gray-500">Upcoming Elections</p>
-                        <p className="text-3xl font-bold mt-1">{statistics.upcomingElections}</p>
+                        <p className="text-3xl font-bold mt-1">{electionData?.statistics.upcomingElections}</p>
                       </div>
                       <div className="bg-white p-4 rounded-lg border border-gray-200">
                         <p className="text-sm font-medium text-gray-500">Current Election ID</p>
-                        <p className="text-3xl font-bold mt-1">{statistics.currentElectionId}</p>
+                        <p className="text-3xl font-bold mt-1">{electionData?.statistics.currentElectionId}</p>
                       </div>
                     </div>
                   )}
@@ -508,7 +261,7 @@ export default function Explorer() {
           </Tabs>
         </div>
       </main>
-      
+
       <Footer />
     </div>
   );

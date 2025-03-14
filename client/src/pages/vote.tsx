@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
 import { NinLoginForm } from "@/components/nin-login-form";
@@ -28,100 +29,39 @@ export default function Vote() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [transactionHash, setTransactionHash] = useState("");
   const [transactionTimestamp, setTransactionTimestamp] = useState("");
-  const [candidates, setCandidates] = useState<Candidate[]>([]);
-  const [isElectionActive, setIsElectionActive] = useState(false);
-  const [electionId, setElectionId] = useState<number>(0);
   const [voterNIN, setVoterNIN] = useState<string>("");
 
   // Use MetaMask hook for wallet integration
   const { isConnected, connect, account } = useMetaMask();
 
-  // Fetch election data and candidates when component mounts
-  useEffect(() => {
-    const fetchElectionData = async () => {
-      try {
-        console.log("Fetching election data for voting page");
-        
-        // First try to get active election ID from blockchain
-        let activeElectionId = await getActiveElectionId();
-        
-        // For testing: if we can't get one from the blockchain, check localStorage
-        if (!activeElectionId) {
-          console.log("No active election found from blockchain, checking localStorage");
-          const testId = localStorage.getItem("testing_election_id");
-          if (testId) {
-            activeElectionId = parseInt(testId);
-            console.log("Using testing election ID from localStorage:", activeElectionId);
-          }
-        }
-        
-        if (activeElectionId > 0) {
-          console.log(`Found active election with ID: ${activeElectionId}`);
-          setElectionId(activeElectionId);
-          
-          // Get election info
-          const electionInfo = await getElectionInfo(activeElectionId);
-          if (electionInfo) {
-            console.log("Election info:", electionInfo);
-            setIsElectionActive(electionInfo.active || false);
-            
-            if (electionInfo.active) {
-              console.log("Election is active, fetching candidates");
-              
-              // Try to get candidates from blockchain
-              const candidatesList = await getAllCandidates(activeElectionId);
-              
-              if (candidatesList && candidatesList.length > 0) {
-                console.log(`Found ${candidatesList.length} candidates:`, candidatesList);
-                setCandidates(candidatesList);
-                
-                // Save candidates to localStorage as backup
-                localStorage.setItem(`election_${activeElectionId}_candidates`, JSON.stringify(candidatesList));
-              } else {
-                // If we couldn't get candidates from blockchain, try localStorage
-                console.log("No candidates found from blockchain, checking localStorage");
-                const cachedCandidates = localStorage.getItem(`election_${activeElectionId}_candidates`);
-                if (cachedCandidates) {
-                  const parsedCandidates = JSON.parse(cachedCandidates);
-                  console.log(`Using ${parsedCandidates.length} cached candidates from localStorage`);
-                  setCandidates(parsedCandidates);
-                } else {
-                  console.error("No candidates found for election");
-                  toast({
-                    title: "Warning",
-                    description: "No candidates found for this election",
-                    variant: "destructive"
-                  });
-                }
-              }
-            } else {
-              console.log("Election is not active");
-            }
-          } else {
-            console.error("Failed to get election info");
-          }
-        } else {
-          console.log("No active election found");
-        }
-      } catch (error) {
-        console.error("Error fetching election data:", error);
-        toast({
-          title: "Error",
-          description: "Failed to load election data",
-          variant: "destructive"
-        });
-      }
-    };
+  // Query for election data
+  const { data: electionData, isLoading: loadingElection } = useQuery({
+    queryKey: ['activeElection'],
+    queryFn: async () => {
+      const activeElectionId = await getActiveElectionId();
+      if (!activeElectionId) return null;
 
-    fetchElectionData();
-  }, [toast]);
+      const electionInfo = await getElectionInfo(activeElectionId);
+      if (!electionInfo || !electionInfo.active) return null;
+
+      const candidates = await getAllCandidates(activeElectionId);
+
+      return {
+        electionId: activeElectionId,
+        info: electionInfo,
+        candidates
+      };
+    },
+    staleTime: 30000, // Consider data fresh for 30 seconds
+    refetchInterval: 60000, // Only refetch every minute
+  });
 
   const handleSelectCandidate = (candidate: Candidate) => {
     setSelectedCandidate(candidate);
   };
 
   const handleCastVote = async () => {
-    if (!selectedCandidate) return;
+    if (!selectedCandidate || !electionData?.electionId) return;
 
     setIsSubmitting(true);
 
@@ -138,12 +78,12 @@ export default function Vote() {
 
         // Cast the vote on the blockchain
         const result = await castVote(
-          electionId,
+          electionData.electionId,
           selectedCandidate.index,
           voterNINHash
         );
 
-        if (result.success) {
+        if (result.success && result.transactionHash) {
           setTransactionHash(result.transactionHash);
           setTransactionTimestamp(new Date().toLocaleString());
           setHasVoted(true);
@@ -171,7 +111,15 @@ export default function Vote() {
 
   // Render different content based on step
   const renderContent = () => {
-    if (!isElectionActive) {
+    if (loadingElection) {
+      return (
+        <div className="text-center py-8">
+          <p className="text-gray-500">Loading election data...</p>
+        </div>
+      );
+    }
+
+    if (!electionData?.info) {
       return <NoActiveElection />;
     }
 
@@ -212,7 +160,7 @@ export default function Vote() {
             </div>
 
             <CandidateGrid
-              candidates={candidates}
+              candidates={electionData.candidates}
               onSelectCandidate={handleSelectCandidate}
               selectedCandidateId={selectedCandidate?.index || null}
             />
@@ -235,7 +183,7 @@ export default function Vote() {
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                       </svg>
-                      Connecting...
+                      Submitting...
                     </>
                   ) : (
                     <>
