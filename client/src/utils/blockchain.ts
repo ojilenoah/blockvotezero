@@ -34,6 +34,10 @@ export interface TransactionResult {
   transactionHash?: string;
   error?: string;
   electionId?: number;
+  // Adding properties that are used in admin-election-creator.tsx
+  from?: string;
+  to?: string;
+  blockNumber?: number;
 }
 
 // Initialize ethers provider
@@ -127,46 +131,19 @@ export const castVote = async (
     const tx = await contract.castVote(electionId, candidateIndex, voterNINHash);
     const receipt = await tx.wait();
 
-    return { 
-      success: true, 
+    return {
+      success: true,
       transactionHash: receipt.hash,
-      electionId: electionId
+      electionId: electionId,
+      from: receipt.from,
+      to: receipt.to,
+      blockNumber: receipt.blockNumber
     };
   } catch (error: any) {
     console.error("Error casting vote:", error);
     return { success: false, error: error.message };
   }
 };
-
-// Admin Operations
-export const isAdmin = async (address: string): Promise<boolean> => {
-  try {
-    const contract = getReadOnlyContract();
-    const admin = await contract.admin();
-    return admin.toLowerCase() === address.toLowerCase();
-  } catch (error) {
-    console.error("Error checking admin status:", error);
-    return false;
-  }
-};
-
-// Helper function to generate SHA-256 hash of NIN
-export const hashNIN = async (nin: string): Promise<string> => {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(nin);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = '0x' + hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  return hashHex;
-};
-
-// Interface for the Election
-export interface Election {
-  exists: boolean;
-  name: string;
-  startTime: string;
-  endTime: string;
-}
 
 // Get transactions for our contract
 export const getContractTransactions = async (): Promise<Transaction[]> => {
@@ -192,42 +169,46 @@ export const getContractTransactions = async (): Promise<Transaction[]> => {
         // Filter transactions involving our contract
         console.log(`Checking block ${i} transactions...`);
         for (const tx of block.transactions) {
-          if (typeof tx === 'string') continue;
+          // Add type assertion and null checks for transaction object
+          if (!tx || typeof tx === 'string') continue;
+
+          // Ensure the transaction has the required properties
+          if (!tx.to || !tx.from || !tx.hash || !tx.data || !tx.value || !tx.blockNumber) continue;
+
+          const transaction = tx as ethers.TransactionResponse;
 
           if (
-            tx.to?.toLowerCase() === CONTRACT_ADDRESS.toLowerCase() ||
-            tx.from?.toLowerCase() === CONTRACT_ADDRESS.toLowerCase()
+            transaction.to.toLowerCase() === CONTRACT_ADDRESS.toLowerCase() ||
+            transaction.from.toLowerCase() === CONTRACT_ADDRESS.toLowerCase()
           ) {
-            console.log(`Found contract transaction in block ${i}:`, tx.hash);
+            console.log(`Found contract transaction in block ${i}:`, transaction.hash);
 
-            const receipt = await provider.getTransactionReceipt(tx.hash);
+            const receipt = await provider.getTransactionReceipt(transaction.hash);
             if (!receipt || !block) continue;
 
             // Try to decode the transaction input data
             let method = "Contract Interaction";
-            if (tx.data) {
-              const methodId = tx.data.slice(0, 10).toLowerCase();
-              // These are the first 4 bytes of the keccak256 hash of the function signatures
-              if (methodId === "0x9112c1eb") {
-                method = "createElection";
-              } else if (methodId === "0x0121b93f") {
-                method = "castVote";
-              }
+            const methodId = transaction.data.slice(0, 10).toLowerCase();
+            // These are the first 4 bytes of the keccak256 hash of the function signatures
+            if (methodId === "0x9112c1eb") {
+              method = "createElection";
+            } else if (methodId === "0x0121b93f") {
+              method = "castVote";
             }
 
-            const transaction: Transaction = {
-              hash: tx.hash,
+            const transactionInfo: Transaction = {
+              hash: transaction.hash,
               timestamp: new Date(block.timestamp * 1000),
-              from: tx.from,
-              to: tx.to || "",
+              from: transaction.from,
+              to: transaction.to,
               method,
-              value: tx.value.toString(),
-              blockNumber: tx.blockNumber || 0,
+              value: transaction.value.toString(),
+              blockNumber: transaction.blockNumber,
               status: receipt.status === 1 ? "Confirmed" : "Failed",
             };
 
-            if (!transactions.some(t => t.hash === transaction.hash)) {
-              transactions.push(transaction);
+            if (!transactions.some(t => t.hash === transactionInfo.hash)) {
+              transactions.push(transactionInfo);
             }
           }
         }
@@ -265,6 +246,36 @@ export const getContractTransactions = async (): Promise<Transaction[]> => {
   }
 };
 
+// Helper function to generate SHA-256 hash of NIN
+export const hashNIN = async (nin: string): Promise<string> => {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(nin);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hashHex = '0x' + hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  return hashHex;
+};
+
+// Admin Operations
+export const isAdmin = async (address: string): Promise<boolean> => {
+  try {
+    const contract = getReadOnlyContract();
+    const admin = await contract.admin();
+    return admin.toLowerCase() === address.toLowerCase();
+  } catch (error) {
+    console.error("Error checking admin status:", error);
+    return false;
+  }
+};
+
+
+// Interface for the Election
+export interface Election {
+  exists: boolean;
+  name: string;
+  startTime: string;
+  endTime: string;
+}
 
 // Create an election
 export const createElection = async (
