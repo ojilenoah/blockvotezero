@@ -10,7 +10,9 @@ import {
   getElectionInfo, 
   getAllCandidates, 
   getTotalVotes, 
-  CONTRACT_ADDRESS 
+  CONTRACT_ADDRESS,
+  getContractTransactions,
+  Transaction as BlockchainTransaction 
 } from "@/utils/blockchain";
 import { useMetaMask } from "@/hooks/use-metamask";
 import { useToast } from "@/hooks/use-toast";
@@ -29,13 +31,18 @@ interface Transaction {
   timestamp: Date;
   status: string;
   blockNumber: number;
+  method?: string;
+  from?: string;
+  to?: string;
 }
 
 export default function Explorer() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [elections, setElections] = useState<Election[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loadingElections, setLoadingElections] = useState(true);
+  const [loadingTransactions, setLoadingTransactions] = useState(true);
   const [statistics, setStatistics] = useState({
     totalElections: 0,
     totalVotes: 0,
@@ -146,6 +153,41 @@ export default function Explorer() {
     };
 
     fetchElections();
+  }, [toast]);
+  
+  // Fetch actual blockchain transactions using Alchemy API
+  useEffect(() => {
+    const fetchTransactions = async () => {
+      setLoadingTransactions(true);
+      try {
+        // Get transactions from the blockchain API
+        const blockchainTransactions = await getContractTransactions();
+        
+        // Map the returned blockchain transactions to our Transaction interface
+        const formattedTransactions: Transaction[] = blockchainTransactions.map(tx => ({
+          hash: tx.hash,
+          timestamp: tx.timestamp,
+          status: tx.status,
+          blockNumber: tx.blockNumber,
+          method: tx.method || "Contract Interaction",
+          from: tx.from,
+          to: tx.to
+        }));
+        
+        setTransactions(formattedTransactions);
+      } catch (error) {
+        console.error("Error fetching blockchain transactions:", error);
+        toast({
+          title: "Transaction Data Error",
+          description: "Could not load transaction data from the blockchain. Using estimated transactions instead.",
+          variant: "destructive"
+        });
+      } finally {
+        setLoadingTransactions(false);
+      }
+    };
+    
+    fetchTransactions();
   }, [toast]);
 
   // Helper to get status badge based on election status

@@ -9,6 +9,9 @@ export const CONTRACT_ADDRESS = "0x65d11a89f244c445112E4E9883FC9b3562b1F281";
 const ALCHEMY_URL =
   "https://polygon-amoy.g.alchemy.com/v2/GH7yUV1qmRdvVI-knD8FYKRyzgBlb1ct";
 
+// Alchemy API Key from the URL
+const ALCHEMY_API_KEY = ALCHEMY_URL.split('/v2/')[1];
+
 // Initialize ethers provider
 const getProvider = () => {
   return new ethers.JsonRpcProvider(ALCHEMY_URL);
@@ -221,4 +224,114 @@ export const hashNIN = async (nin: string): Promise<string> => {
   const hashHex =
     "0x" + hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
   return hashHex;
+};
+
+// Interface for transaction data
+export interface Transaction {
+  hash: string;
+  timestamp: Date;
+  from: string;
+  to: string;
+  value: string;
+  method: string;
+  blockNumber: number;
+  status: string;
+}
+
+// Get transactions for our contract using Alchemy API
+export const getContractTransactions = async (): Promise<Transaction[]> => {
+  try {
+    // Use the Alchemy API to get transactions for our contract
+    const response = await fetch(`https://polygon-amoy.g.alchemy.com/v2/${ALCHEMY_API_KEY}/transfers`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        "jsonrpc": "2.0",
+        "id": 0,
+        "method": "alchemy_getAssetTransfers",
+        "params": [
+          {
+            "fromBlock": "0x0",
+            "toBlock": "latest",
+            "toAddress": CONTRACT_ADDRESS,
+            "category": ["external", "internal", "erc20", "erc721", "erc1155"],
+            "withMetadata": true,
+            "excludeZeroValue": false,
+            "maxCount": "0x32" // Get up to 50 transactions
+          }
+        ]
+      }),
+    });
+
+    const data = await response.json();
+    
+    // Get all transactions to our contract
+    const incomingTransactions = data.result?.transfers || [];
+    
+    // Additional request to get outgoing transactions from our contract
+    const outResponse = await fetch(`https://polygon-amoy.g.alchemy.com/v2/${ALCHEMY_API_KEY}/transfers`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        "jsonrpc": "2.0",
+        "id": 0,
+        "method": "alchemy_getAssetTransfers",
+        "params": [
+          {
+            "fromBlock": "0x0",
+            "toBlock": "latest",
+            "fromAddress": CONTRACT_ADDRESS,
+            "category": ["external", "internal", "erc20", "erc721", "erc1155"],
+            "withMetadata": true,
+            "excludeZeroValue": false,
+            "maxCount": "0x32" // Get up to 50 transactions
+          }
+        ]
+      }),
+    });
+    
+    const outData = await outResponse.json();
+    const outgoingTransactions = outData.result?.transfers || [];
+    
+    // Format transactions
+    const formatTransaction = (tx: any): Transaction => {
+      // Try to determine the method name from the transaction data
+      let method = "Contract Interaction";
+      
+      // For transactions to the contract that create elections
+      if (tx.to.toLowerCase() === CONTRACT_ADDRESS.toLowerCase() && tx.input?.includes("createElection")) {
+        method = "createElection";
+      } 
+      // For vote transactions
+      else if (tx.to.toLowerCase() === CONTRACT_ADDRESS.toLowerCase() && tx.input?.includes("castVote")) {
+        method = "castVote";
+      }
+      
+      return {
+        hash: tx.hash,
+        timestamp: new Date(tx.metadata.blockTimestamp),
+        from: tx.from,
+        to: tx.to,
+        value: tx.value,
+        method: method,
+        blockNumber: tx.blockNum,
+        status: "Confirmed" // Alchemy returns confirmed transactions
+      };
+    };
+    
+    // Combine and sort all transactions by timestamp (newest first)
+    const allTransactions = [
+      ...incomingTransactions.map(formatTransaction),
+      ...outgoingTransactions.map(formatTransaction)
+    ].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+    
+    return allTransactions;
+  } catch (error) {
+    console.error("Error fetching contract transactions:", error);
+    return [];
+  }
 };
