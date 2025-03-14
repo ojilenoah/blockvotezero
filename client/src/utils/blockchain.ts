@@ -66,7 +66,7 @@ export const createElection = async (
     );
 
     const receipt = await tx.wait();
-    return { success: true, transactionHash: receipt.transactionHash };
+    return { success: true, transactionHash: receipt.hash };
   } catch (error: any) {
     console.error("Error creating election:", error);
     return { success: false, error: error.message };
@@ -103,27 +103,15 @@ export const castVote = async (electionId: number, candidateIndex: number, voter
   }
 };
 
-// Check if voter has already voted
-export const hasVoted = async (electionId: number, voterNINHash: string): Promise<boolean> => {
-  const contract = getReadOnlyContract();
-
-  try {
-    return await contract.hasVoted(electionId, voterNINHash);
-  } catch (error) {
-    console.error("Error checking if voter has voted:", error);
-    return false;
-  }
-};
-
-// Get active election ID
+// Get active election ID (using currentElectionId from contract)
 export const getActiveElectionId = async (): Promise<number> => {
   const contract = getReadOnlyContract();
 
   try {
-    const activeElectionId = await contract.getActiveElectionId();
-    return Number(activeElectionId);
+    const currentId = await contract.currentElectionId();
+    return Number(currentId);
   } catch (error) {
-    console.error("Error getting active election ID:", error);
+    console.error("Error getting current election ID:", error);
     return 0;
   }
 };
@@ -133,18 +121,30 @@ export const getElectionInfo = async (electionId: number) => {
   const contract = getReadOnlyContract();
 
   try {
-    const info = await contract.getElectionInfo(electionId);
+    const election = await contract.elections(electionId);
 
     return {
-      name: info.name,
-      startTime: new Date(Number(info.startTime) * 1000),
-      endTime: new Date(Number(info.endTime) * 1000),
-      active: info.active,
-      candidateCount: Number(info.candidateCount),
+      name: election.name,
+      startTime: new Date(Number(election.startTime) * 1000),
+      endTime: new Date(Number(election.endTime) * 1000),
+      active: election.exists && (Date.now() >= Number(election.startTime) * 1000) && (Date.now() <= Number(election.endTime) * 1000),
+      candidateCount: await getCandidateCount(electionId),
     };
   } catch (error) {
     console.error(`Error getting election info for ID ${electionId}:`, error);
     return null;
+  }
+};
+
+// Get candidate count (helper function)
+const getCandidateCount = async (electionId: number): Promise<number> => {
+  const contract = getReadOnlyContract();
+  try {
+    const count = await contract.getCandidateCount(electionId);
+    return Number(count);
+  } catch (error) {
+    console.error(`Error getting candidate count for election ${electionId}:`, error);
+    return 0;
   }
 };
 
@@ -153,17 +153,16 @@ export const getCandidate = async (electionId: number, candidateIndex: number) =
   const contract = getReadOnlyContract();
 
   try {
-    const info = await contract.getCandidate(electionId, candidateIndex);
-
+    const candidate = await contract.candidates(electionId, candidateIndex);
     return {
-      name: info.name,
-      party: info.party,
-      votes: Number(info.votes),
+      name: candidate.name,
+      party: candidate.party,
+      votes: Number(candidate.votes),
     };
   } catch (error) {
     console.error(
       `Error getting candidate info for election ${electionId}, candidate ${candidateIndex}:`,
-      error,
+      error
     );
     return null;
   }
@@ -174,20 +173,17 @@ export const getAllCandidates = async (electionId: number) => {
   const contract = getReadOnlyContract();
 
   try {
-    const info = await contract.getElectionInfo(electionId);
-    const candidateCount = Number(info.candidateCount);
-
+    const candidateCount = await getCandidateCount(electionId);
     const candidates = [];
+
     for (let i = 0; i < candidateCount; i++) {
-      const candidate = await contract.getCandidate(electionId, i);
-      if (candidate) {
-        candidates.push({
-          name: candidate.name,
-          party: candidate.party,
-          votes: Number(candidate.votes),
-          index: i
-        });
-      }
+      const candidate = await contract.candidates(electionId, i);
+      candidates.push({
+        name: candidate.name,
+        party: candidate.party,
+        votes: Number(candidate.votes),
+        index: i
+      });
     }
 
     return candidates;
