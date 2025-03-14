@@ -3,7 +3,7 @@ import { ethers } from "ethers";
 import VotingSystemABI from "../contracts/VotingSystem.json";
 import { Candidate } from "../types/candidate";
 
-// Contract address from deployment
+// Contract address - using the proxy address
 export const CONTRACT_ADDRESS = "0xc0895D39fBBD1918067d5Fa41beDAF51d36665B5";
 
 // Alchemy provider URL
@@ -54,8 +54,8 @@ const getReadOnlyContract = (): ethers.Contract => {
 // Admin Operations
 export const isAdmin = async (address: string): Promise<boolean> => {
   try {
-    const contract = getReadOnlyContract();
     console.log("Checking admin status for address:", address);
+    const contract = getReadOnlyContract();
     const admin = await contract.admin();
     console.log("Contract admin address:", admin);
     return admin.toLowerCase() === address.toLowerCase();
@@ -234,18 +234,6 @@ export const createElection = async (
   }
 };
 
-// Get address from private key
-export const getAddressFromPrivateKey = (privateKey: string): string | null => {
-  try {
-    const wallet = new ethers.Wallet(privateKey);
-    return wallet.address;
-  } catch (error) {
-    console.error("Invalid private key:", error);
-    return null;
-  }
-};
-
-
 // Cast a vote
 export const castVote = async (
   electionId: number,
@@ -273,8 +261,8 @@ export const castVote = async (
     }
 
     const block = await provider.getBlock(receipt.blockNumber);
-    if (!block || !receipt) {
-      throw new Error("Failed to get transaction details");
+    if (!block) {
+      throw new Error("Failed to get block details");
     }
 
     const txData: Transaction = {
@@ -301,7 +289,9 @@ export const getActiveElectionId = async (): Promise<number> => {
   const contract = getReadOnlyContract();
 
   try {
-    const currentId = await contract.getActiveElectionId();
+    console.log("Getting active election ID...");
+    const currentId = await contract.currentElectionId();
+    console.log("Current election ID:", currentId.toString());
     return Number(currentId);
   } catch (error) {
     console.error("Error getting active election ID:", error);
@@ -314,7 +304,9 @@ export const getElectionInfo = async (electionId: number): Promise<ElectionInfo 
   const contract = getReadOnlyContract();
 
   try {
+    console.log(`Getting election info for ID ${electionId}`);
     const info = await contract.getElectionInfo(electionId);
+    console.log("Election info response:", info);
 
     const electionInfo: ElectionInfo = {
       name: info.name,
@@ -328,6 +320,7 @@ export const getElectionInfo = async (electionId: number): Promise<ElectionInfo 
       `election_${electionId}_info`,
       JSON.stringify(electionInfo),
     );
+
     return electionInfo;
   } catch (error) {
     console.error(`Error getting election info for ID ${electionId}:`, error);
@@ -350,7 +343,9 @@ export const getAllCandidates = async (electionId: number): Promise<Candidate[]>
   const contract = getReadOnlyContract();
 
   try {
+    console.log(`Getting candidates for election ${electionId}`);
     const result = await contract.getAllCandidates(electionId);
+    console.log("Candidates response:", result);
 
     const candidates: Candidate[] = result.names.map((name: string, i: number) => ({
       name,
@@ -393,6 +388,7 @@ export const getTotalVotes = async (electionId: number): Promise<number> => {
   const contract = getReadOnlyContract();
 
   try {
+    console.log(`Getting total votes for election ${electionId}`);
     const total = await contract.getTotalVotes(electionId);
     return total.toNumber();
   } catch (error) {
@@ -415,6 +411,7 @@ export const hashNIN = async (nin: string): Promise<string> => {
   return hashHex;
 };
 
+// Interface for the Election
 export interface Election {
   exists: boolean;
   name: string;
@@ -422,186 +419,72 @@ export interface Election {
   endTime: string;
 }
 
-// Get transactions for our contract using a combination of known interactions and contract provider
+// Get transactions for our contract
 export const getContractTransactions = async (): Promise<Transaction[]> => {
   try {
     const contract = getReadOnlyContract();
     const provider = getProvider();
     const transactions: Transaction[] = [];
 
-    // Get currentElectionId to know how many elections we have
-    const currentElectionId = await contract.currentElectionId();
-    const electionCount = Number(currentElectionId);
-    console.log("Found elections:", electionCount);
+    // Check recent transactions
+    const latestBlock = await provider.getBlockNumber();
+    const searchRange = 1000; // Look back this many blocks
+    const startBlock = Math.max(0, latestBlock - searchRange);
 
-    // First, add all known election creation transactions
-    for (let id = 1; id <= electionCount; id++) {
+    // For each recent block, check transactions
+    for (let i = latestBlock; i >= startBlock && transactions.length < 20; i -= 100) {
       try {
-        // Get election info to access the basic data
-        const election = await contract.getElectionInfo(id);
+        const block = await provider.getBlock(i, true);
+        if (!block || !block.transactions) continue;
 
-        if (!election.exists) continue;
+        // Filter transactions involving our contract
+        const contractTxs = block.transactions.filter(tx => {
+          if (typeof tx === 'string') return false;
+          return (
+            tx.to?.toLowerCase() === CONTRACT_ADDRESS.toLowerCase() ||
+            tx.from?.toLowerCase() === CONTRACT_ADDRESS.toLowerCase()
+          );
+        });
 
-        // For each election, find the transaction that created it
-        // We would need to query for event logs to get the exact transaction
-        // Since we can't query event logs directly in this case, use a workaround:
+        // Process each transaction
+        for (const tx of contractTxs) {
+          if (typeof tx === 'string') continue;
+          if (transactions.some((t) => t.hash === tx.hash)) continue;
 
-        // Add this election's creation transaction (approximate)
-        const startTimestamp = Number(election.startTime) * 1000;
-        const creationTimestamp = new Date(
-          startTimestamp - 1000 * 60 * 60 * 24,
-        ); // Assume created 1 day before start
+          const receipt = await provider.getTransactionReceipt(tx.hash);
+          if (!receipt || !block) continue;
 
-        // Look for events from the contract
-        try {
-          // Get ElectionCreated events - unfortunately this might not work without proper indexing
-          const filter = contract.filters.ElectionCreated(id);
-          const events = await contract.queryFilter(filter);
-
-          if (events.length > 0) {
-            const event = events[0];
-
-            // Get the transaction details
-            const tx = await provider.getTransaction(event.transactionHash);
-            const receipt = await provider.getTransactionReceipt(
-              event.transactionHash,
-            );
-            const block = await provider.getBlock(receipt.blockNumber);
-
-            transactions.push({
-              hash: event.transactionHash,
-              timestamp: new Date(block.timestamp * 1000),
-              from: receipt.from,
-              to: receipt.to as string,
-              method: "createElection",
-              value: tx.value.toString(),
-              blockNumber: receipt.blockNumber,
-              status: receipt.status === 1 ? "Confirmed" : "Failed",
-            });
-
-            console.log("Added creation transaction for election", id);
-          }
-        } catch (eventError) {
-          console.log("Could not get events for election", id, eventError);
-
-          // Fallback: add a synthesized transaction based on known election data
           transactions.push({
-            hash: `0x${Array.from(election.name + id)
-              .map((c) => c.charCodeAt(0).toString(16).padStart(2, "0"))
-              .join("")
-              .substring(0, 64)}`,
-            timestamp: creationTimestamp,
-            from: "0x0000000000000000000000000000000000000000", // We don't know the creator
-            to: CONTRACT_ADDRESS,
-            method: "createElection",
-            value: "0",
-            blockNumber: 0,
-            status: "Confirmed",
+            hash: tx.hash,
+            timestamp: new Date(block.timestamp * 1000),
+            from: tx.from,
+            to: tx.to || "",
+            method: tx.data.includes("createElection")
+              ? "createElection"
+              : tx.data.includes("castVote")
+              ? "castVote"
+              : "Contract Interaction",
+            value: tx.value.toString(),
+            blockNumber: tx.blockNumber || 0,
+            status: receipt.status === 1 ? "Confirmed" : "Failed",
           });
         }
-
-        // Try to get vote transactions too (VoteCast events)
-        try {
-          const voteFilter = contract.filters.VoteCast(id);
-          const voteEvents = await contract.queryFilter(voteFilter);
-
-          for (const event of voteEvents) {
-            const receipt = await provider.getTransactionReceipt(
-              event.transactionHash,
-            );
-            const block = await provider.getBlock(receipt.blockNumber);
-
-            transactions.push({
-              hash: event.transactionHash,
-              timestamp: new Date(block.timestamp * 1000),
-              from: receipt.from,
-              to: receipt.to as string,
-              method: "castVote",
-              value: "0",
-              blockNumber: receipt.blockNumber,
-              status: receipt.status === 1 ? "Confirmed" : "Failed",
-            });
-          }
-        } catch (voteEventError) {
-          console.log(
-            "Could not get vote events for election",
-            id,
-            voteEventError,
-          );
-        }
-      } catch (electionError) {
-        console.error("Error processing election", id, electionError);
+      } catch (blockError) {
+        console.error(`Error processing block ${i}:`, blockError);
+        continue;
       }
     }
 
-    // Try to get latest known transaction involving the contract
-    try {
-      // Use the provider to get recent blocks
-      const latestBlock = await provider.getBlockNumber();
-      const searchRange = 10000; // Look back this many blocks
-      const startBlock = Math.max(0, latestBlock - searchRange);
+    // Add stored transactions
+    const lastTxs = [
+      localStorage.getItem("lastElectionCreationTx"),
+      localStorage.getItem("lastVoteCastTx"),
+    ];
 
-      console.log(
-        `Searching for transactions from block ${startBlock} to ${latestBlock}`,
-      );
-
-      // For each recent block, check transactions
-      for (
-        let i = latestBlock;
-        i >= startBlock && transactions.length < 20;
-        i -= 100
-      ) {
-        try {
-          const block = await provider.getBlock(i, true);
-
-          if (block && block.transactions) {
-            // Filter transactions involving our contract
-            const contractTxs = block.transactions.filter(
-              (tx) =>
-                tx.to?.toLowerCase() === CONTRACT_ADDRESS.toLowerCase() ||
-                tx.from?.toLowerCase() === CONTRACT_ADDRESS.toLowerCase(),
-            );
-
-            // Add these transactions to our list
-            for (const tx of contractTxs) {
-              // Skip transactions we already know about
-              if (transactions.some((t) => t.hash === tx.hash)) continue;
-
-              const receipt = await provider.getTransactionReceipt(tx.hash);
-
-              // Try to determine the method
-              let method = "Contract Interaction";
-              if (tx.data.includes("9112c1eb")) {
-                method = "createElection";
-              } else if (tx.data.includes("0121b93f")) {
-                method = "castVote";
-              }
-
-              transactions.push({
-                hash: tx.hash,
-                timestamp: new Date(block.timestamp * 1000),
-                from: tx.from,
-                to: tx.to as string,
-                method,
-                value: tx.value.toString(),
-                blockNumber: tx.blockNumber as number,
-                status: receipt.status === 1 ? "Confirmed" : "Failed",
-              });
-            }
-          }
-        } catch (blockError) {
-          console.log(`Error processing block ${i}:`, blockError);
-        }
-      }
-    } catch (blockRangeError) {
-      console.error("Error fetching block range:", blockRangeError);
-    }
-
-    // Add any known transaction we previously created
-    const createdElectionTx = localStorage.getItem("lastElectionCreationTx");
-    if (createdElectionTx) {
+    for (const txJson of lastTxs) {
+      if (!txJson) continue;
       try {
-        const txData = JSON.parse(createdElectionTx) as Transaction;
+        const txData = JSON.parse(txJson) as Transaction;
         if (!transactions.some((t) => t.hash === txData.hash)) {
           transactions.push(txData);
         }
@@ -610,64 +493,12 @@ export const getContractTransactions = async (): Promise<Transaction[]> => {
       }
     }
 
-    // Also check for saved vote transactions
-    const lastVoteTx = localStorage.getItem("lastVoteCastTx");
-    if (lastVoteTx) {
-      try {
-        const txData = JSON.parse(lastVoteTx) as Transaction;
-        if (!transactions.some((t) => t.hash === txData.hash)) {
-          transactions.push(txData);
-        }
-      } catch (e) {
-        console.error("Error parsing stored vote transaction:", e);
-      }
-    }
-
-    // If we still have no transactions, check if we have one from our logs
-    if (transactions.length === 0) {
-      // Check console logs for transaction hashes
-      const consoleItems = window.performance
-        .getEntriesByType("resource")
-        .filter((r) => r.name.includes("console.log"));
-
-      if (consoleItems.length > 0) {
-        const txHash =
-          "0xb9980e0f5557844fcf9409074df1e3c86bb6c2aec5e4c6e9795250c899513ac9"; // From your recent transaction
-
-        try {
-          const tx = await provider.getTransaction(txHash);
-          const receipt = await provider.getTransactionReceipt(txHash);
-          const block = await provider.getBlock(tx.blockNumber as number);
-
-          transactions.push({
-            hash: txHash,
-            timestamp: new Date(block.timestamp * 1000),
-            from: receipt.from,
-            to: receipt.to as string,
-            method: "createElection",
-            value: tx.value.toString(),
-            blockNumber: tx.blockNumber as number,
-            status: receipt.status === 1 ? "Confirmed" : "Failed",
-          });
-        } catch (e) {
-          console.error("Error retrieving known transaction:", e);
-        }
-      }
-    }
-
     // Sort transactions by timestamp (newest first)
     return transactions.sort(
-      (a, b) => (b.timestamp?.getTime() || 0) - (a.timestamp?.getTime() || 0),
+      (a, b) => b.timestamp.getTime() - a.timestamp.getTime(),
     );
   } catch (error) {
     console.error("Error fetching contract transactions:", error);
     return [];
   }
 };
-
-export interface Election {
-  exists: boolean;
-  name: string;
-  startTime: string;
-  endTime: string;
-}
