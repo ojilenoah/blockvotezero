@@ -11,7 +11,6 @@ import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { createElection } from "@/utils/blockchain";
-import { useMetaMask } from "@/hooks/use-metamask";
 
 interface AdminElectionCreatorProps {
   isElectionActive: boolean;
@@ -40,7 +39,6 @@ type ElectionFormValues = z.infer<typeof electionFormSchema>;
 
 export function AdminElectionCreator({ isElectionActive }: AdminElectionCreatorProps) {
   const { toast } = useToast();
-  const { account } = useMetaMask();
   const [candidates, setCandidates] = useState<Candidate[]>([
     { id: 1, name: "", party: "" },
     { id: 2, name: "", party: "" },
@@ -97,19 +95,15 @@ export function AdminElectionCreator({ isElectionActive }: AdminElectionCreatorP
       return;
     }
 
-    if (!account) {
-      toast({
-        title: "Error",
-        description: "Please connect your wallet first",
-        variant: "destructive",
-      });
-      return;
-    }
-
     const candidateNames = candidates.map(c => c.name);
     const candidateParties = candidates.map(c => c.party);
 
     try {
+      toast({
+        title: "Creating election",
+        description: "Please confirm the transaction in MetaMask",
+      });
+
       const result = await createElection(
         data.name,
         new Date(data.startTime),
