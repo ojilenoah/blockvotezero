@@ -118,10 +118,7 @@ export const createElection = async (
     }
 
     if (candidateNames.length !== candidateParties.length) {
-      return {
-        success: false,
-        error: "Candidate names and parties count mismatch",
-      };
+      return { success: false, error: "Candidate names and parties count mismatch" };
     }
 
     // Convert dates to Unix timestamps
@@ -181,7 +178,7 @@ export const createElection = async (
     const txData: Transaction = {
       hash: receipt.hash,
       timestamp: new Date(block.timestamp * 1000),
-      from: receipt.from,
+      from: receipt.from || "",
       to: receipt.to || "",
       method: "createElection",
       value: "0",
@@ -209,12 +206,21 @@ export const createElection = async (
       JSON.stringify(candidateObjects),
     );
 
+    // Immediately fetch and cache the election info
+    const electionInfo = await getElectionInfo(electionIdNumber);
+    if (electionInfo) {
+      localStorage.setItem(
+        `election_${electionIdNumber}_info`,
+        JSON.stringify(electionInfo)
+      );
+    }
+
     return {
       success: true,
       transactionHash: receipt.hash,
       electionId: electionIdNumber,
-      from: receipt.from,
-      to: receipt.to,
+      from: receipt.from || "",
+      to: receipt.to || "",
       blockNumber: receipt.blockNumber,
     };
   } catch (error: any) {
@@ -281,6 +287,18 @@ export const castVote = async (
     };
 
     localStorage.setItem("lastVoteCastTx", JSON.stringify(txData));
+
+    // Update cached vote count
+    try {
+      const candidates = await getAllCandidates(electionId);
+      localStorage.setItem(
+        `election_${electionId}_candidates`,
+        JSON.stringify(candidates)
+      );
+    } catch (e) {
+      console.error("Error updating cached candidates after vote:", e);
+    }
+
     return { success: true, transactionHash: receipt.hash };
   } catch (error: any) {
     console.error("Error casting vote:", error);
@@ -335,7 +353,7 @@ export const getElectionInfo = async (electionId: number): Promise<ElectionInfo 
         return JSON.parse(cachedInfo) as ElectionInfo;
       }
     } catch (cacheError) {
-      console.error("No cached election info available");
+      console.error("Error accessing localStorage:", cacheError);
     }
 
     return null;
