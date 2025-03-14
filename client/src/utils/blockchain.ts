@@ -144,15 +144,55 @@ export const castVote = async (electionId: number, candidateIndex: number, voter
   }
 };
 
-// Get active election ID (using currentElectionId from contract)
+// Get active election ID (using currentElectionId from contract and checking if it's active)
 export const getActiveElectionId = async (): Promise<number> => {
   const contract = getReadOnlyContract();
 
   try {
     const currentId = await contract.currentElectionId();
-    return Number(currentId);
+    const currentIdNumber = Number(currentId);
+    
+    // If we have a currentId, check if it's active
+    if (currentIdNumber > 0) {
+      const election = await contract.elections(currentIdNumber);
+      const now = Math.floor(Date.now() / 1000); // Current time in seconds
+      
+      // Check if this election is currently active (exists, started, and not ended)
+      const isActive = election.exists && 
+                     Number(election.startTime) <= now && 
+                     Number(election.endTime) >= now;
+      
+      if (isActive) {
+        return currentIdNumber;
+      }
+    }
+    
+    // If current election is not active, try to find any active election
+    // We'll look through the first few possible IDs
+    const maxElectionsToCheck = 10;
+    
+    for (let id = 1; id <= Math.max(currentIdNumber, maxElectionsToCheck); id++) {
+      try {
+        const election = await contract.elections(id);
+        if (!election.exists) continue;
+        
+        const now = Math.floor(Date.now() / 1000); // Current time in seconds
+        
+        // Check if this election is currently active
+        if (Number(election.startTime) <= now && Number(election.endTime) >= now) {
+          return id;
+        }
+      } catch (error) {
+        console.error(`Error checking election ${id}:`, error);
+        continue;
+      }
+    }
+    
+    // No active election found
+    console.log("No active elections found");
+    return 0;
   } catch (error) {
-    console.error("Error getting current election ID:", error);
+    console.error("Error getting active election ID:", error);
     return 0;
   }
 };
