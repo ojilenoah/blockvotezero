@@ -107,7 +107,6 @@ export function AdminElectionCreator({ isElectionActive }: AdminElectionCreatorP
 
     try {
       const result = await createElection(
-        account!,
         data.name,
         startTime,
         endTime,

@@ -50,26 +50,32 @@ export const getAddressFromPrivateKey = (privateKey) => {
 
 // Create an election
 export const createElection = async (
-  privateKey,
   name,
   startTime,
   endTime,
   candidateNames,
   candidateParties,
 ) => {
-  const contract = getSignedContract(privateKey);
+  if (!window.ethereum) {
+    return { success: false, error: "MetaMask is not installed!" };
+  }
 
   try {
+    await window.ethereum.request({ method: "eth_requestAccounts" });
+    const provider = new ethers.providers.Web3Provider(window.ethereum);
+    const signer = provider.getSigner();
+    const contract = new ethers.Contract(CONTRACT_ADDRESS, VotingSystemABI, signer);
+
     const tx = await contract.createElection(
       name,
-      Math.floor(startTime.getTime() / 1000), // Convert to Unix timestamp
-      Math.floor(endTime.getTime() / 1000), // Convert to Unix timestamp
+      Math.floor(startTime.getTime() / 1000),
+      Math.floor(endTime.getTime() / 1000),
       candidateNames,
       candidateParties,
     );
 
     const receipt = await tx.wait();
-    return { success: true, transactionHash: receipt.transactionHash };
+    return { success: true, transactionHash: receipt.hash };
   } catch (error) {
     console.error("Error creating election:", error);
     return { success: false, error: error.message };
