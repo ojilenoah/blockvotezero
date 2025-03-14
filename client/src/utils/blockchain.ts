@@ -40,7 +40,6 @@ export const getActiveElectionId = async (): Promise<number> => {
     console.log("Current election ID:", currentId.toString());
 
     if (currentId > 0) {
-      // Check current election first
       try {
         const info = await contract.electionInfo(currentId);
         console.log("Raw election info:", info);
@@ -100,7 +99,6 @@ export const getElectionInfo = async (electionId: number): Promise<ElectionInfo 
 
   try {
     console.log(`Getting election info for ID ${electionId}`);
-    // Use electionInfo mapping instead of getElectionInfo function
     const info = await contract.electionInfo(electionId);
     console.log("Raw election info response:", info);
 
@@ -114,7 +112,6 @@ export const getElectionInfo = async (electionId: number): Promise<ElectionInfo 
     const endTime = Number(info.endTime);
     const active = now >= startTime && now <= endTime;
     const upcoming = now < startTime;
-    const candidateCount = Number(info.candidateCount);
 
     console.log("Processed election data:", {
       name: info.name,
@@ -123,7 +120,7 @@ export const getElectionInfo = async (electionId: number): Promise<ElectionInfo 
       now,
       active,
       upcoming,
-      candidateCount
+      candidateCount: Number(info.candidateCount)
     });
 
     return {
@@ -132,7 +129,7 @@ export const getElectionInfo = async (electionId: number): Promise<ElectionInfo 
       endTime: new Date(endTime * 1000),
       active,
       upcoming,
-      candidateCount
+      candidateCount: Number(info.candidateCount)
     };
   } catch (error) {
     console.error(`Error getting election info for ID ${electionId}:`, error);

@@ -34,7 +34,7 @@ export function ElectionInfoCard() {
         if (activeElectionId > 0) {
           // Get election info
           const electionInfo = await getElectionInfo(activeElectionId);
-          console.log("Fetched election info:", electionInfo);
+          console.log("Election info:", electionInfo);
 
           if (electionInfo) {
             setElectionData({
@@ -51,7 +51,7 @@ export function ElectionInfoCard() {
               endTime: electionInfo.endTime
             });
 
-            // Get candidates if election is not upcoming
+            // Get candidates if election has started (active or ended)
             if (!electionInfo.upcoming) {
               const candidateList = await getAllCandidates(activeElectionId);
               console.log("Candidates:", candidateList);
