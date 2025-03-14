@@ -35,35 +35,19 @@ export const getActiveElectionId = async (): Promise<number> => {
   const contract = getReadOnlyContract();
 
   try {
-    console.log("Getting current election ID...");
     const currentId = await contract.currentElectionId();
     console.log("Current election ID:", currentId.toString());
 
-    // Start from the most recent election and work backwards
-    const maxElections = Math.min(Number(currentId), 5); // Check last 5 elections at most
-
-    for (let id = Number(currentId); id > Number(currentId) - maxElections; id--) {
-      if (id <= 0) break;
-
+    // Check each election from newest to oldest
+    for (let id = Number(currentId); id > 0; id--) {
       try {
-        console.log(`Checking election ${id}...`);
         const info = await contract.getElectionInfo(id);
 
-        if (!info || !info.exists) {
-          console.log(`Election ${id} does not exist, continuing...`);
-          continue;
-        }
+        if (!info || !info.exists) continue;
 
         const now = Math.floor(Date.now() / 1000);
         const startTime = Number(info.startTime);
         const endTime = Number(info.endTime);
-
-        console.log(`Election ${id} times:`, {
-          now,
-          startTime,
-          endTime,
-          isActive: now >= startTime && now <= endTime
-        });
 
         if (now >= startTime && now <= endTime) {
           console.log(`Found active election: ${id}`);
@@ -74,7 +58,6 @@ export const getActiveElectionId = async (): Promise<number> => {
       }
     }
 
-    console.log("No active election found");
     return 0;
   } catch (error) {
     console.error("Error getting active election ID:", error);
@@ -82,53 +65,85 @@ export const getActiveElectionId = async (): Promise<number> => {
   }
 };
 
+// Get all elections (for explorer page)
+export const getAllElections = async (): Promise<number[]> => {
+  const contract = getReadOnlyContract();
+  const elections: number[] = [];
+
+  try {
+    const currentId = await contract.currentElectionId();
+
+    // Get all elections from 1 to currentId
+    for (let id = 1; id <= Number(currentId); id++) {
+      try {
+        const info = await contract.getElectionInfo(id);
+        if (info && info.exists) {
+          elections.push(id);
+        }
+      } catch (error) {
+        console.error(`Error checking election ${id}:`, error);
+      }
+    }
+  } catch (error) {
+    console.error("Error getting all elections:", error);
+  }
+
+  return elections;
+};
+
 // Get election info
 export const getElectionInfo = async (electionId: number): Promise<ElectionInfo | null> => {
-  if (electionId <= 0) {
-    console.log("Invalid election ID", electionId);
-    return null;
-  }
+  if (electionId <= 0) return null;
 
   const contract = getReadOnlyContract();
 
   try {
-    console.log(`Getting election info for ID ${electionId}`);
     const info = await contract.getElectionInfo(electionId);
-    console.log("Raw election info response:", info);
 
-    if (!info || !info.exists) {
-      console.log(`No election found for ID ${electionId}`);
-      return null;
-    }
+    if (!info || !info.exists) return null;
 
     const now = Math.floor(Date.now() / 1000);
     const startTime = Number(info.startTime);
     const endTime = Number(info.endTime);
-    const active = now >= startTime && now <= endTime;
-    const upcoming = now < startTime;
-
-    console.log("Processed election data:", {
-      name: info.name,
-      startTime,
-      endTime,
-      now,
-      active,
-      upcoming,
-      candidateCount: Number(info.candidateCount)
-    });
 
     return {
       name: info.name,
       startTime: new Date(startTime * 1000),
       endTime: new Date(endTime * 1000),
-      active,
-      upcoming,
+      active: now >= startTime && now <= endTime,
+      upcoming: now < startTime,
       candidateCount: Number(info.candidateCount)
     };
   } catch (error) {
     console.error(`Error getting election info for ID ${electionId}:`, error);
     return null;
   }
+};
+
+// Get completed elections
+export const getCompletedElections = async (): Promise<number[]> => {
+  const contract = getReadOnlyContract();
+  const completed: number[] = [];
+
+  try {
+    const currentId = await contract.currentElectionId();
+    const now = Math.floor(Date.now() / 1000);
+
+    for (let id = 1; id <= Number(currentId); id++) {
+      try {
+        const info = await contract.getElectionInfo(id);
+        if (info && info.exists && now > Number(info.endTime)) {
+          completed.push(id);
+        }
+      } catch (error) {
+        console.error(`Error checking completed election ${id}:`, error);
+      }
+    }
+  } catch (error) {
+    console.error("Error getting completed elections:", error);
+  }
+
+  return completed;
 };
 
 // Get all candidates for an election
