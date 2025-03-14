@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -7,17 +8,86 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { AdminNavbar } from "@/components/admin-navbar";
 import { AdminElectionCreator } from "@/components/admin-election-creator";
+import { AdminElectionLog } from "@/components/admin-election-log";
 import { AdminManagement } from "@/components/admin-management";
 import { BlockchainTest } from "@/components/blockchain-test";
-import { getActiveElectionId, getElectionInfo } from "@/utils/blockchain";
+import { getActiveElectionId, getElectionInfo, getAllCandidates, getTotalVotes } from "@/utils/blockchain";
+import type { Election } from "../explorer";
 
 export default function AdminDashboard() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [adminAddress, setAdminAddress] = useState<string>("");
-  const [activeElections, setActiveElections] = useState<number>(0);
-  const [isElectionActive, setIsElectionActive] = useState<boolean>(false);
+
+  // Query for getting elections data
+  const { data: electionData, isLoading: loadingElections } = useQuery({
+    queryKey: ['admin-elections'],
+    queryFn: async () => {
+      const currentElectionId = await getActiveElectionId();
+      const electionList: Election[] = [];
+      let totalVotesCount = 0;
+      let activeCount = 0;
+      let upcomingCount = 0;
+
+      // Lookup up to the first 10 possible election IDs
+      const maxElectionsToFetch = 10;
+
+      for (let id = 1; id <= Math.max(currentElectionId, maxElectionsToFetch); id++) {
+        try {
+          const electionInfo = await getElectionInfo(id);
+
+          if (electionInfo && electionInfo.name) {
+            const now = new Date();
+            const startTime = new Date(electionInfo.startTime);
+            const endTime = new Date(electionInfo.endTime);
+            let status: "Active" | "Upcoming" | "Completed" = "Completed";
+
+            if (now < startTime) {
+              status = "Upcoming";
+              upcomingCount++;
+            } else if (now >= startTime && now <= endTime) {
+              status = "Active";
+              activeCount++;
+            }
+
+            const votes = await getTotalVotes(id);
+            totalVotesCount += votes;
+
+            electionList.push({
+              id,
+              name: electionInfo.name,
+              startTime: startTime.toISOString(),
+              endTime: endTime.toISOString(),
+              status,
+              totalVotes: votes
+            });
+          }
+        } catch (err) {
+          console.error(`Error fetching election ${id}:`, err);
+        }
+      }
+
+      return {
+        elections: electionList.sort((a, b) => {
+          if (a.status !== b.status) {
+            const statusOrder = { Active: 0, Upcoming: 1, Completed: 2 };
+            return statusOrder[a.status] - statusOrder[b.status];
+          }
+          return new Date(b.startTime).getTime() - new Date(a.startTime).getTime();
+        }),
+        statistics: {
+          totalElections: electionList.length,
+          totalVotes: totalVotesCount,
+          activeElections: activeCount,
+          upcomingElections: upcomingCount,
+          completedElections: electionList.length - activeCount - upcomingCount,
+        }
+      };
+    },
+    staleTime: 30000, // Consider data fresh for 30 seconds
+    refetchInterval: 60000, // Refetch every minute
+  });
 
   useEffect(() => {
     const isAdmin = sessionStorage.getItem("isAdmin") === "true";
@@ -35,21 +105,6 @@ export default function AdminDashboard() {
 
     setIsAuthenticated(true);
     setAdminAddress(storedAddress);
-
-    const fetchElectionData = async () => {
-      try {
-        const activeElectionId = await getActiveElectionId();
-        if (activeElectionId > 0) {
-          const electionInfo = await getElectionInfo(activeElectionId);
-          setIsElectionActive(electionInfo?.active || false);
-          setActiveElections(electionInfo?.active ? 1 : 0);
-        }
-      } catch (error) {
-        console.error("Error fetching election data:", error);
-      }
-    };
-
-    fetchElectionData();
   }, [setLocation, toast]);
 
   const handleLogout = () => {
@@ -66,6 +121,9 @@ export default function AdminDashboard() {
   if (!isAuthenticated) {
     return <div className="p-8 text-center">Authenticating...</div>;
   }
+
+  const isElectionActive = electionData?.elections.some(e => e.status === "Active") ?? false;
+  const hasUpcomingElection = electionData?.elections.some(e => e.status === "Upcoming") ?? false;
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -93,23 +151,23 @@ export default function AdminDashboard() {
                 <CardTitle>Active Elections</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold">{activeElections}</div>
+                <div className="text-3xl font-bold">{electionData?.statistics.activeElections || 0}</div>
               </CardContent>
             </Card>
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle>Contract Status</CardTitle>
+                <CardTitle>Upcoming Elections</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-sm text-green-600">Connected</div>
+                <div className="text-3xl font-bold">{electionData?.statistics.upcomingElections || 0}</div>
               </CardContent>
             </Card>
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle>Network</CardTitle>
+                <CardTitle>Total Votes</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-sm">Polygon Amoy Testnet</div>
+                <div className="text-3xl font-bold">{electionData?.statistics.totalVotes || 0}</div>
               </CardContent>
             </Card>
           </div>
@@ -122,17 +180,28 @@ export default function AdminDashboard() {
             </TabsList>
 
             <TabsContent value="create">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Create New Election</CardTitle>
-                  <CardDescription>
-                    Set up a new election to be deployed to the blockchain
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <AdminElectionCreator isElectionActive={isElectionActive} />
-                </CardContent>
-              </Card>
+              <div className="space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Create New Election</CardTitle>
+                    <CardDescription>
+                      Set up a new election to be deployed to the blockchain
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <AdminElectionCreator 
+                      isElectionActive={isElectionActive}
+                      hasUpcomingElection={hasUpcomingElection}
+                      electionStatus={isElectionActive ? "active" : hasUpcomingElection ? "upcoming" : "none"}
+                    />
+                  </CardContent>
+                </Card>
+
+                <AdminElectionLog 
+                  elections={electionData?.elections || []}
+                  isLoading={loadingElections}
+                />
+              </div>
             </TabsContent>
 
             <TabsContent value="manage">

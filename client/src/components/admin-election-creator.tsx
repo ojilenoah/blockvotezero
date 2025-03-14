@@ -14,6 +14,8 @@ import { createElection } from "@/utils/blockchain";
 
 interface AdminElectionCreatorProps {
   isElectionActive: boolean;
+  hasUpcomingElection: boolean;
+  electionStatus: string;
 }
 
 type Candidate = {
@@ -37,7 +39,7 @@ const electionFormSchema = z.object({
 
 type ElectionFormValues = z.infer<typeof electionFormSchema>;
 
-export function AdminElectionCreator({ isElectionActive }: AdminElectionCreatorProps) {
+export function AdminElectionCreator({ isElectionActive, hasUpcomingElection, electionStatus }: AdminElectionCreatorProps) {
   const { toast } = useToast();
   const [candidates, setCandidates] = useState<Candidate[]>([
     { id: 1, name: "", party: "" },
@@ -45,6 +47,8 @@ export function AdminElectionCreator({ isElectionActive }: AdminElectionCreatorP
   ]);
   const [creationSuccess, setCreationSuccess] = useState(false);
   const [transactionHash, setTransactionHash] = useState("");
+
+  const isDisabled = isElectionActive || hasUpcomingElection;
 
   const form = useForm<ElectionFormValues>({
     resolver: zodResolver(electionFormSchema),
@@ -122,7 +126,7 @@ export function AdminElectionCreator({ isElectionActive }: AdminElectionCreatorP
         if (result.electionId) {
           const electionId = result.electionId;
           console.log(`Storing candidates for election ${electionId} in localStorage`);
-          
+
           // Format candidates with index and initial vote count
           const candidatesWithMetadata = candidates.map((c, index) => ({
             name: c.name,
@@ -130,12 +134,12 @@ export function AdminElectionCreator({ isElectionActive }: AdminElectionCreatorP
             votes: 0,
             index
           }));
-          
+
           localStorage.setItem(
             `election_${electionId}_candidates`, 
             JSON.stringify(candidatesWithMetadata)
           );
-          
+
           // Also store any transaction data
           if (result.transactionHash) {
             localStorage.setItem('lastElectionCreationTx', JSON.stringify({
@@ -149,7 +153,7 @@ export function AdminElectionCreator({ isElectionActive }: AdminElectionCreatorP
               status: "Confirmed"
             }));
           }
-          
+
           console.log(`Successfully stored ${candidatesWithMetadata.length} candidates for election ${electionId}`);
         }
 
@@ -208,12 +212,13 @@ export function AdminElectionCreator({ isElectionActive }: AdminElectionCreatorP
 
   return (
     <div>
-      {isElectionActive && (
+      {(isElectionActive || hasUpcomingElection) && (
         <Alert variant="destructive" className="mb-6">
-          <AlertTitle>Active Election in Progress</AlertTitle>
+          <AlertTitle>Cannot Create New Election</AlertTitle>
           <AlertDescription>
-            You cannot create a new election while another one is active.
-            Please wait for the current election to end.
+            {isElectionActive 
+              ? "An election is currently active. Please wait for it to end before creating a new one."
+              : "There is an upcoming election scheduled. Only one election can be scheduled at a time."}
           </AlertDescription>
         </Alert>
       )}
@@ -228,7 +233,7 @@ export function AdminElectionCreator({ isElectionActive }: AdminElectionCreatorP
                 <FormItem>
                   <FormLabel>Election Name</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g. 2023 Community Council Election" {...field} disabled={isElectionActive} />
+                    <Input placeholder="e.g. 2023 Community Council Election" {...field} disabled={isDisabled} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -243,7 +248,7 @@ export function AdminElectionCreator({ isElectionActive }: AdminElectionCreatorP
                   <FormItem>
                     <FormLabel>Start Date & Time</FormLabel>
                     <FormControl>
-                      <Input type="datetime-local" {...field} disabled={isElectionActive} />
+                      <Input type="datetime-local" {...field} disabled={isDisabled} />
                     </FormControl>
                     <FormDescription>
                       When voting begins
@@ -260,7 +265,7 @@ export function AdminElectionCreator({ isElectionActive }: AdminElectionCreatorP
                   <FormItem>
                     <FormLabel>End Date & Time</FormLabel>
                     <FormControl>
-                      <Input type="datetime-local" {...field} disabled={isElectionActive} />
+                      <Input type="datetime-local" {...field} disabled={isDisabled} />
                     </FormControl>
                     <FormDescription>
                       When voting ends
@@ -287,7 +292,7 @@ export function AdminElectionCreator({ isElectionActive }: AdminElectionCreatorP
                         variant="outline"
                         size="sm"
                         onClick={() => handleRemoveCandidate(candidate.id)}
-                        disabled={isElectionActive}
+                        disabled={isDisabled}
                       >
                         Remove
                       </Button>
@@ -300,7 +305,7 @@ export function AdminElectionCreator({ isElectionActive }: AdminElectionCreatorP
                           placeholder="Full name"
                           value={candidate.name}
                           onChange={(e) => handleCandidateChange(candidate.id, 'name', e.target.value)}
-                          disabled={isElectionActive}
+                          disabled={isDisabled}
                           className="mt-1"
                         />
                       </div>
@@ -311,7 +316,7 @@ export function AdminElectionCreator({ isElectionActive }: AdminElectionCreatorP
                           placeholder="Party name"
                           value={candidate.party}
                           onChange={(e) => handleCandidateChange(candidate.id, 'party', e.target.value)}
-                          disabled={isElectionActive}
+                          disabled={isDisabled}
                           className="mt-1"
                         />
                       </div>
@@ -324,7 +329,7 @@ export function AdminElectionCreator({ isElectionActive }: AdminElectionCreatorP
                 type="button"
                 variant="outline"
                 onClick={handleAddCandidate}
-                disabled={isElectionActive}
+                disabled={isDisabled}
                 className="w-full"
               >
                 Add Another Candidate
@@ -333,7 +338,7 @@ export function AdminElectionCreator({ isElectionActive }: AdminElectionCreatorP
           </div>
 
           <div className="flex justify-end">
-            <Button type="submit" size="lg" disabled={isElectionActive}>
+            <Button type="submit" size="lg" disabled={isDisabled}>
               Create Election
             </Button>
           </div>

@@ -28,6 +28,12 @@ export interface Transaction {
   status: string;
 }
 
+export interface PaginatedTransactions {
+  transactions: Transaction[];
+  hasMore: boolean;
+  nextBlock?: number;
+}
+
 export interface TransactionResult {
   success: boolean;
   transactionHash?: string;
@@ -229,50 +235,46 @@ export interface Election {
 }
 
 // Get transactions for our contract
-export const getContractTransactions = async (): Promise<Transaction[]> => {
+export const getContractTransactions = async (
+  startBlock?: number,
+  pageSize: number = 10
+): Promise<PaginatedTransactions> => {
   try {
     const provider = getProvider();
     const transactions: Transaction[] = [];
 
-    // Check recent transactions
+    // Get latest block
     const latestBlock = await provider.getBlockNumber();
     console.log("Latest block:", latestBlock);
 
-    const searchRange = 1000; // Look back this many blocks
-    const startBlock = Math.max(0, latestBlock - searchRange);
+    // Calculate the starting block
+    const currentStartBlock = startBlock || latestBlock;
+    const endBlock = Math.max(0, currentStartBlock - 100); // Look back 100 blocks at a time
 
-    console.log(`Searching blocks from ${startBlock} to ${latestBlock}`);
+    console.log(`Searching blocks from ${currentStartBlock} to ${endBlock}`);
 
-    // For each recent block, check transactions
-    for (let i = latestBlock; i >= startBlock && transactions.length < 20; i -= 100) {
+    // For each block in range, check transactions
+    for (let i = currentStartBlock; i >= endBlock && transactions.length < pageSize; i--) {
       try {
         const block = await provider.getBlock(i, true);
         if (!block || !block.transactions) continue;
 
         // Filter transactions involving our contract
-        console.log(`Checking block ${i} transactions...`);
         for (const tx of block.transactions) {
-          // Add type assertion and null checks for transaction object
           if (!tx || typeof tx === 'string') continue;
 
-          // Ensure the transaction has the required properties
-          if (!tx.to || !tx.from || !tx.hash || !tx.data || !tx.value || !tx.blockNumber) continue;
-
-          const transaction = tx as any;
+          const transaction = tx as ethers.Transaction;
 
           if (
-            transaction.to.toLowerCase() === CONTRACT_ADDRESS.toLowerCase() ||
-            transaction.from.toLowerCase() === CONTRACT_ADDRESS.toLowerCase()
+            transaction.to?.toLowerCase() === CONTRACT_ADDRESS.toLowerCase() ||
+            transaction.from?.toLowerCase() === CONTRACT_ADDRESS.toLowerCase()
           ) {
-            console.log(`Found contract transaction in block ${i}:`, transaction.hash);
-
             const receipt = await provider.getTransactionReceipt(transaction.hash);
             if (!receipt || !block) continue;
 
             // Try to decode the transaction input data
             let method = "Contract Interaction";
             const methodId = transaction.data.slice(0, 10).toLowerCase();
-            // These are the first 4 bytes of the keccak256 hash of the function signatures
             if (methodId === "0x9112c1eb") {
               method = "createElection";
             } else if (methodId === "0x0121b93f") {
@@ -281,12 +283,12 @@ export const getContractTransactions = async (): Promise<Transaction[]> => {
 
             const transactionInfo: Transaction = {
               hash: transaction.hash,
-              timestamp: new Date(block.timestamp * 1000),
-              from: transaction.from,
-              to: transaction.to,
+              timestamp: new Date(Number(block.timestamp) * 1000),
+              from: transaction.from || "",
+              to: transaction.to || "",
               method,
               value: transaction.value.toString(),
-              blockNumber: transaction.blockNumber,
+              blockNumber: Number(transaction.blockNumber),
               status: receipt.status === 1 ? "Confirmed" : "Failed",
             };
 
@@ -301,30 +303,17 @@ export const getContractTransactions = async (): Promise<Transaction[]> => {
       }
     }
 
-    // Add stored transactions
-    const lastTxs = [
-      localStorage.getItem("lastElectionCreationTx"),
-      localStorage.getItem("lastVoteCastTx"),
-    ];
+    // Determine if there are more transactions to load
+    const hasMore = endBlock > 0;
+    const nextBlock = hasMore ? endBlock - 1 : undefined;
 
-    for (const txJson of lastTxs) {
-      if (!txJson) continue;
-      try {
-        const txData = JSON.parse(txJson) as Transaction;
-        if (!transactions.some((t) => t.hash === txData.hash)) {
-          transactions.push(txData);
-        }
-      } catch (e) {
-        console.error("Error parsing stored transaction:", e);
-      }
-    }
-
-    // Sort transactions by timestamp (newest first)
-    return transactions.sort(
-      (a, b) => b.timestamp.getTime() - a.timestamp.getTime(),
-    );
+    return {
+      transactions: transactions.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()),
+      hasMore,
+      nextBlock
+    };
   } catch (error) {
     console.error("Error fetching contract transactions:", error);
-    return [];
+    return { transactions: [], hasMore: false };
   }
 };
