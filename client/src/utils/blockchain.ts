@@ -187,18 +187,22 @@ export const castVote = async (
     const signer = await provider.getSigner();
     const contract = new ethers.Contract(CONTRACT_ADDRESS, VotingSystemABI.abi, signer);
 
-    // Generate a unique voter ID by combining election ID and NIN hash
-    // Convert electionId to a hex string and pad it
-    const electionIdHex = electionId.toString(16).padStart(64, '0');
-    // Remove '0x' prefix from voterNINHash if present
+    // Create a unique voter hash that combines election ID and NIN hash
+    // First ensure the NIN hash is in the correct format
     const cleanNINHash = voterNINHash.startsWith('0x') ? voterNINHash.slice(2) : voterNINHash;
-    // Combine them in a way that ensures uniqueness
-    const uniqueVoterHash = ethers.getBytes(`0x${electionIdHex}${cleanNINHash}`);
+
+    // Pack the election ID and NIN hash together and create a new hash
+    const uniqueVoterHash = ethers.keccak256(
+      ethers.solidityPacked(
+        ['uint256', 'bytes32'],
+        [electionId, `0x${cleanNINHash}`]
+      )
+    );
 
     console.log("Casting vote with:", {
       electionId,
       candidateIndex,
-      uniqueVoterHash: ethers.hexlify(uniqueVoterHash)
+      uniqueVoterHash
     });
 
     const tx = await contract.castVote(electionId, candidateIndex, uniqueVoterHash);
