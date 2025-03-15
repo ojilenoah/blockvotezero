@@ -103,14 +103,25 @@ export function NinStatusCheck() {
               <TabsContent value="phantom" className="mt-4">
                 <PhantomWalletButton 
                   onConnect={(address) => {
-                    // This simulates the MetaMask connection by setting the account
-                    (window as any).ethereum = { 
-                      selectedAddress: address,
-                      isConnected: true
-                    };
+                    // Directly handle the Phantom wallet address without simulating MetaMask
+                    setLoading(true);
                     
-                    // Force the useMetaMask hook to update
-                    connect();
+                    // Get NIN status for this address
+                    getNINByWalletAddress(address)
+                      .then(result => {
+                        if (result) {
+                          setUserDetails(result);
+                        } else {
+                          setUserDetails(null);
+                        }
+                      })
+                      .catch(err => {
+                        console.error("Error fetching NIN status:", err);
+                        setError("Failed to fetch NIN status. Please try again.");
+                      })
+                      .finally(() => {
+                        setLoading(false);
+                      });
                   }}
                 />
               </TabsContent>

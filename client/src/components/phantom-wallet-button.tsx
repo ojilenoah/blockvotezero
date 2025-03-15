@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { usePhantom } from "@/hooks/use-phantom";
 
 interface PhantomWalletButtonProps {
   onConnect: (address: string) => void;
@@ -9,68 +9,20 @@ interface PhantomWalletButtonProps {
 }
 
 export function PhantomWalletButton({ onConnect, className = "" }: PhantomWalletButtonProps) {
-  const [isPhantomInstalled, setIsPhantomInstalled] = useState<boolean>(false);
-  const [isConnecting, setIsConnecting] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
+  const { 
+    isPhantomInstalled, 
+    isConnecting, 
+    isConnected, 
+    polygonAddress, 
+    error, 
+    connect 
+  } = usePhantom();
 
-  // Check if Phantom is installed
-  useEffect(() => {
-    const checkPhantomInstalled = async () => {
-      // @ts-ignore - Phantom is not typed
-      const isPhantomAvailable = window.phantom?.solana?.isPhantom;
-      setIsPhantomInstalled(!!isPhantomAvailable);
-    };
-
-    checkPhantomInstalled();
-  }, []);
-
-  // Connect to Phantom Wallet
-  const connectWallet = async () => {
-    setIsConnecting(true);
-    setError(null);
-
-    try {
-      // @ts-ignore - Phantom is not in the window types
-      const provider = window.phantom?.solana;
-
-      if (!provider?.isPhantom) {
-        throw new Error("Phantom wallet is not installed");
-      }
-
-      // Connect to Phantom
-      const response = await provider.connect();
-      const solanaPublicKey = response.publicKey.toString();
-      
-      // For demonstration purposes, we'll derive a fake Polygon address from the Solana public key
-      // In a real implementation, you would use Phantom's actual API for getting Polygon addresses
-      try {
-        // Get the user to input a Polygon address directly
-        const polygonAddress = prompt("Please enter your Polygon wallet address (0x format):");
-        
-        if (polygonAddress && polygonAddress.startsWith('0x')) {
-          // Validate the Polygon address format (simple check for 0x prefix and length)
-          if (polygonAddress.length === 42) {
-            console.log("Using user-provided Polygon address:", polygonAddress);
-            onConnect(polygonAddress);
-          } else {
-            throw new Error("Invalid Polygon address format");
-          }
-        } else {
-          // Generate a valid Polygon address format from Solana public key for demonstration
-          // In reality, this should be properly implemented with a wallet that supports Polygon
-          const polygonStyleAddress = "0x" + solanaPublicKey.slice(0, 40);
-          console.log("Using derived Polygon address:", polygonStyleAddress);
-          onConnect(polygonStyleAddress);
-        }
-      } catch (err: any) {
-        console.error("Error with Polygon address:", err);
-        setError(err.message || "Failed to get Polygon address. Please try again.");
-      }
-    } catch (err: any) {
-      console.error("Error connecting to Phantom wallet:", err);
-      setError(err.message || "Failed to connect to Phantom wallet");
-    } finally {
-      setIsConnecting(false);
+  // Connect handler
+  const handleConnect = async () => {
+    const address = await connect();
+    if (address) {
+      onConnect(address);
     }
   };
 
@@ -106,8 +58,8 @@ export function PhantomWalletButton({ onConnect, className = "" }: PhantomWallet
         </Alert>
       )}
       <Button
-        onClick={connectWallet}
-        disabled={isConnecting}
+        onClick={handleConnect}
+        disabled={isConnecting || isConnected}
         className="w-full bg-[#4E44CE] hover:bg-[#3D35AA] text-white"
       >
         {isConnecting ? (
@@ -130,8 +82,14 @@ export function PhantomWalletButton({ onConnect, className = "" }: PhantomWallet
             />
           </svg>
         )}
-        Connect with Phantom
+        {isConnected ? 'Connected with Phantom' : 'Connect with Phantom'}
       </Button>
+      
+      {isConnected && polygonAddress && (
+        <div className="mt-2 text-xs text-center text-slate-500">
+          Connected: {polygonAddress.substring(0, 6)}...{polygonAddress.substring(38)}
+        </div>
+      )}
     </div>
   );
 }

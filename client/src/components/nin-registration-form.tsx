@@ -14,6 +14,14 @@ import { useMetaMask } from "@/hooks/use-metamask";
 import { submitNIN } from "@/utils/supabase";
 import { PhantomWalletButton } from "@/components/phantom-wallet-button";
 
+// Extend Window interface for Phantom integration
+declare global {
+  interface Window {
+    phantomPolygonAddress?: string;
+    isPhantomConnected?: boolean;
+  }
+}
+
 // Validation schema for NIN
 const ninSchema = z.object({
   nin: z
@@ -31,7 +39,8 @@ interface NinRegistrationFormProps {
 
 export function NinRegistrationForm({ onSuccess }: NinRegistrationFormProps) {
   const { toast } = useToast();
-  const { account, isConnected, connect } = useMetaMask();
+  const { account, isConnected, connect, ...metaMaskState } = useMetaMask();
+  const [state, setState] = useState(metaMaskState);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -129,16 +138,40 @@ export function NinRegistrationForm({ onSuccess }: NinRegistrationFormProps) {
               <TabsContent value="phantom" className="mt-4">
                 <PhantomWalletButton 
                   onConnect={(address) => {
-                    // This simulates the MetaMask connection by setting the account
-                    // We don't have a real connection function so we're directly manipulating the state
-                    (window as any).ethereum = { 
-                      selectedAddress: address,
-                      isConnected: true
-                    };
+                    // We can directly use the address for submission without MetaMask
+                    // Just manually update our UI to reflect the connection
+                    setIsSubmitting(false);
                     
-                    // Force the useMetaMask hook to update by calling its connect method
-                    // This is a bit of a hack, but it works for our purposes
-                    handleConnectWallet();
+                    // Instead of trying to modify the MetaMask state, let's create a simpler approach
+                    // We'll add the Phantom-connected address directly to the form submission
+                    const formData = form.getValues();
+                    
+                    if (formData.nin && formData.nin.length === 11) {
+                      // If the user already entered a valid NIN, submit it right away with the Phantom address
+                      submitNIN(address, formData.nin)
+                        .then(result => {
+                          if (result.success) {
+                            setSuccess(true);
+                            toast({
+                              title: "NIN Submitted",
+                              description: "Your NIN has been submitted successfully with Phantom wallet and is pending verification.",
+                            });
+                            
+                            if (onSuccess) {
+                              onSuccess();
+                            }
+                          } else {
+                            setError(result.error || "Failed to submit NIN. Please try again.");
+                          }
+                        })
+                        .catch(err => {
+                          setError(err.message || "An unexpected error occurred. Please try again.");
+                        });
+                    } else {
+                      // Otherwise just store the address for later submission
+                      window.phantomPolygonAddress = address;
+                      window.isPhantomConnected = true;
+                    }
                   }}
                 />
               </TabsContent>
