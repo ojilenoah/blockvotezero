@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "buildCommand": "npm run build",
+  "devCommand": "npm run dev",
+  "installCommand": "npm install",
+  "framework": "vite",
+  "builds": [
+    {
+      "src": "client/dist/**",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/client/dist/$1"
+    }
+  ],
+  "env": {
+    "VITE_ALCHEMY_URL": "polygon-amoy.g.alchemy.com/v2/",
+    "VITE_CONTRACT_ADDRESS": "0xc0895D39fBBD1918067d5Fa41beDAF51d36665B5"
+  }
+}
