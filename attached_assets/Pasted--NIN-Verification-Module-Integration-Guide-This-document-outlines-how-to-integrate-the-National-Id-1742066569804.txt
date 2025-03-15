@@ -1,0 +1,94 @@
+# NIN Verification Module Integration Guide
+
+This document outlines how to integrate the National Identification Number (NIN) verification module as a new page within your existing application. The module will be accessible via the "Register" button in your main application's navbar.
+
+## Overview
+
+The NIN verification module will be implemented as a dedicated page that allows:
+- User authentication via MetaMask
+- NIN submission and verification
+- Status checking for verified users
+- Administrative controls for managing verifications
+
+## Integration Approach
+
+### Navigation & Access
+
+The NIN verification module will be accessible through:
+1. The existing navigation bar on your homepage
+2. A "Register" button that directs users to the verification page
+
+### Supabase Connection
+
+The module will connect to your existing Supabase project:
+- **Project URL**: https://fiufvpeumrdvkwjawbwu.supabase.co
+- **Anon Key**: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpdWZ2cGV1bXJkdmt3amF3Ynd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDE2MDMxNDYsImV4cCI6MjA1NzE3OTE0Nn0.ysgSIqoP9E9fXU2y83yHm6APg7lnbZoBA6hKUktsoD4
+
+### Database Tables
+
+The module will interact with two Supabase tables:
+1. `users` - Stores user NIN and verification status
+2. `admin_config` - Manages system settings like lock status
+
+## User Journey
+
+### For Regular Users
+
+1. **Access Point**: Click the "Register" button in the main application's navbar
+2. **Authentication**: Connect MetaMask wallet when prompted
+3. **Initial Check**: System verifies if the wallet address is already registered
+   - If registered: Display NIN and verification status
+   - If new: Prompt for NIN submission
+
+4. **NIN Submission**:
+   - Enter 11-digit NIN
+   - System validates format and checks if submissions are locked
+   - Upon successful submission, status is set to "N" (Not Verified)
+
+5. **Status Checking**:
+   - Users can return to check if their status has been updated to "Y" (Verified)
+
+### For Administrators
+
+1. **Authentication**: Admin connects using authorized MetaMask wallet
+2. **Dashboard Access**: System recognizes admin wallet and displays additional controls
+3. **Management Features**:
+   - View all submitted NINs and their status
+   - Update verification status from "N" to "Y" for legitimate entries
+   - Toggle lock/unlock for new NIN submissions
+
+## UI/UX Considerations
+
+The NIN verification page will:
+- Match the overall design language of your main application
+- Use the same color scheme and typography
+- Feature responsive design for mobile compatibility
+- Provide clear status indicators and error messages
+- Include loading states for database operations
+
+## Security Measures
+
+The integration will implement:
+1. Wallet address verification for all operations
+2. Admin-only access controls for sensitive functions
+3. Input validation for NIN submissions
+4. Unique constraint enforcement on NIN entries
+5. Error handling for failed connections or transactions
+
+## State Management
+
+The verification module will:
+- Track user authentication state
+- Store wallet connection status
+- Cache verification status to minimize database calls
+- Monitor admin privileges when applicable
+
+## Implementation Notes
+
+When integrating this module:
+- Ensure proper route configuration in your main application
+- Update your navigation component to include the Register link
+- Configure proper authentication flows between the main app and the verification module
+- Test thoroughly for seamless transitions between application sections
+
+This module serves as an essential registration step within your larger application, providing a secure and streamlined way to verify users' National Identification Numbers against their blockchain identities.
