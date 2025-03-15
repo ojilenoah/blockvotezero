@@ -68,7 +68,7 @@ export function NinStatusCheck() {
       </CardHeader>
       <CardContent className="space-y-4">
         {!isConnected ? (
-          <Alert variant="warning">
+          <Alert className="bg-yellow-50 border-yellow-200">
             <AlertTitle>Wallet Connection Required</AlertTitle>
             <AlertDescription>
               Connect your MetaMask wallet to check your NIN verification status.
@@ -98,7 +98,7 @@ export function NinStatusCheck() {
             </Button>
           </Alert>
         ) : !userDetails ? (
-          <Alert variant="info">
+          <Alert className="bg-blue-50 border-blue-200">
             <AlertTitle>No NIN Found</AlertTitle>
             <AlertDescription>
               We couldn't find a registered NIN associated with this wallet address.

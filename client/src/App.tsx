@@ -7,6 +7,7 @@ import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
 import Vote from "@/pages/vote";
 import Explorer from "@/pages/explorer";
+import Register from "@/pages/register";
 import AdminLogin from "@/pages/admin/login";
 import AdminDashboard from "@/pages/admin/dashboard";
 
@@ -16,6 +17,7 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/vote" component={Vote} />
       <Route path="/explorer" component={Explorer} />
+      <Route path="/register" component={Register} />
       <Route path="/admin/login" component={AdminLogin} />
       <Route path="/admin/dashboard" component={AdminDashboard} />
       {/* Fallback to 404 */}

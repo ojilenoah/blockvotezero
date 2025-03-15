@@ -10,6 +10,7 @@ import { AdminNavbar } from "@/components/admin-navbar";
 import { AdminElectionCreator } from "@/components/admin-election-creator";
 import { AdminElectionLog } from "@/components/admin-election-log";
 import { AdminManagement } from "@/components/admin-management";
+import { AdminNinManagement } from "@/components/admin-nin-management";
 import { BlockchainTest } from "@/components/blockchain-test";
 import { getActiveElectionId, getElectionInfo, getAllCandidates, getTotalVotes } from "@/utils/blockchain";
 
@@ -177,6 +178,7 @@ export default function AdminDashboard() {
           <Tabs defaultValue="create">
             <TabsList className="mb-6">
               <TabsTrigger value="create">Create Election</TabsTrigger>
+              <TabsTrigger value="nin">NIN Verification</TabsTrigger>
               <TabsTrigger value="manage">Manage Admin</TabsTrigger>
               <TabsTrigger value="test">Blockchain Test</TabsTrigger>
             </TabsList>
@@ -218,6 +220,10 @@ export default function AdminDashboard() {
                   <AdminManagement currentAddress={adminAddress} />
                 </CardContent>
               </Card>
+            </TabsContent>
+
+            <TabsContent value="nin">
+              <AdminNinManagement />
             </TabsContent>
 
             <TabsContent value="test">

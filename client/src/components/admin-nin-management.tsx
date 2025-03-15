@@ -215,9 +215,10 @@ export function AdminNinManagement() {
                     </TableCell>
                     <TableCell className="text-right">
                       <Button 
-                        variant={user.verification_status === 'Y' ? "destructive" : "success"} 
+                        variant={user.verification_status === 'Y' ? "destructive" : "default"} 
                         size="sm"
                         onClick={() => handleToggleVerification(user.id, user.verification_status)}
+                        className={user.verification_status === 'Y' ? "" : "bg-green-600 hover:bg-green-700 text-white"}
                       >
                         {user.verification_status === 'Y' ? (
                           <>

@@ -91,7 +91,7 @@ export function NinRegistrationForm({ onSuccess }: NinRegistrationFormProps) {
       <CardContent>
         {!isConnected ? (
           <div className="space-y-4">
-            <Alert variant="warning" className="mb-4">
+            <Alert className="mb-4 bg-yellow-50 border-yellow-200">
               <AlertTitle>Wallet Connection Required</AlertTitle>
               <AlertDescription>
                 Connect your MetaMask wallet to register your NIN. This is required for verification purposes.
