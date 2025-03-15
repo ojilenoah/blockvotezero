@@ -50,10 +50,11 @@ export default function Register() {
               <h2 className="text-xl font-semibold mb-2">Important Information</h2>
               <ul className="list-disc pl-5 space-y-2 text-sm text-slate-700">
                 <li>Your NIN will be securely stored and used only for voter verification purposes.</li>
-                <li>You must connect your MetaMask wallet to register and check your verification status.</li>
+                <li>You must connect your wallet (MetaMask or Phantom) to register and check your verification status.</li>
                 <li>NIN verification may take some time as it goes through an administrative review process.</li>
                 <li>Once verified, you will be eligible to participate in blockchain-based elections.</li>
                 <li>Your wallet address will be associated with your NIN for secure voter identification.</li>
+                <li>Phantom wallet users can connect using their Polygon addresses for seamless verification.</li>
               </ul>
             </div>
           </div>

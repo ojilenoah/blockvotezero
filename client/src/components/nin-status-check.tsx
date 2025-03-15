@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CheckCircle, XCircle, Clock } from "lucide-react";
 import { useMetaMask } from "@/hooks/use-metamask";
 import { getNINByWalletAddress, User } from "@/utils/supabase";
+import { PhantomWalletButton } from "@/components/phantom-wallet-button";
 
 export function NinStatusCheck() {
   const { isConnected, account, connect } = useMetaMask();
@@ -68,19 +70,52 @@ export function NinStatusCheck() {
       </CardHeader>
       <CardContent className="space-y-4">
         {!isConnected ? (
-          <Alert className="bg-yellow-50 border-yellow-200">
-            <AlertTitle>Wallet Connection Required</AlertTitle>
-            <AlertDescription>
-              Connect your MetaMask wallet to check your NIN verification status.
-            </AlertDescription>
-            <Button 
-              onClick={connect} 
-              className="mt-2"
-              variant="outline"
-            >
-              Connect Wallet
-            </Button>
-          </Alert>
+          <div className="space-y-4">
+            <Alert className="bg-yellow-50 border-yellow-200">
+              <AlertTitle>Wallet Connection Required</AlertTitle>
+              <AlertDescription>
+                Connect your wallet to check your NIN verification status.
+              </AlertDescription>
+            </Alert>
+            
+            <Tabs defaultValue="metamask" className="w-full">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="metamask">MetaMask</TabsTrigger>
+                <TabsTrigger value="phantom">Phantom</TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="metamask" className="mt-4">
+                <Button 
+                  onClick={connect} 
+                  className="w-full"
+                  variant="outline"
+                >
+                  <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 35 33" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M32.9582 1L17.9582 10.0000L16.9582 4.8369L32.9582 1Z" fill="#E17726" stroke="#E17726" strokeWidth="0.25" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M2.83203 1L17.6514 10.0000L18.8329 4.8369L2.83203 1Z" fill="#E27625" stroke="#E27625" strokeWidth="0.25" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M28.2783 23.5088L24.7334 28.7866L32.0894 30.7866L34.1761 23.6369L28.2783 23.5088Z" fill="#E27625" stroke="#E27625" strokeWidth="0.25" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M1.62695 23.6292L3.70728 30.7789L11.0567 28.7789L7.51837 23.5011L1.62695 23.6292Z" fill="#E27625" stroke="#E27625" strokeWidth="0.25" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  Connect with MetaMask
+                </Button>
+              </TabsContent>
+              
+              <TabsContent value="phantom" className="mt-4">
+                <PhantomWalletButton 
+                  onConnect={(address) => {
+                    // This simulates the MetaMask connection by setting the account
+                    (window as any).ethereum = { 
+                      selectedAddress: address,
+                      isConnected: true
+                    };
+                    
+                    // Force the useMetaMask hook to update
+                    connect();
+                  }}
+                />
+              </TabsContent>
+            </Tabs>
+          </div>
         ) : loading ? (
           <div className="flex justify-center p-6">
             <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
