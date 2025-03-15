@@ -60,28 +60,28 @@ export function AdminNinManagement() {
     }
   }, [isConnected, account]);
 
-  const handleToggleVerification = async (userId: string, currentStatus: 'Y' | 'N') => {
+  const handleToggleVerification = async (walletAddress: string, currentStatus: 'Y' | 'N') => {
     const newStatus = currentStatus === 'Y' ? 'N' : 'Y';
     
     try {
       // Update user in the local state to show immediate feedback
       setUsers(prevUsers => 
         prevUsers.map(user => 
-          user.id === userId 
-            ? { ...user, verification_status: newStatus } 
+          user.wallet_address === walletAddress 
+            ? { ...user, status: newStatus } 
             : user
         )
       );
       
       // Call the API to update the status
-      const result = await updateNINVerificationStatus(userId, newStatus);
+      const result = await updateNINVerificationStatus(walletAddress, newStatus);
       
       if (!result.success) {
         // If the API call fails, revert the local state
         setUsers(prevUsers => 
           prevUsers.map(user => 
-            user.id === userId 
-              ? { ...user, verification_status: currentStatus } 
+            user.wallet_address === walletAddress 
+              ? { ...user, status: currentStatus } 
               : user
           )
         );
@@ -105,14 +105,24 @@ export function AdminNinManagement() {
   const handleToggleLock = async () => {
     setLoadingLockStatus(true);
     
+    if (!account) {
+      toast({
+        title: "Error",
+        description: "Admin wallet not connected",
+        variant: "destructive",
+      });
+      setLoadingLockStatus(false);
+      return;
+    }
+    
     try {
       const newLockStatus = !isSubmissionLocked;
       
       // Optimistically update UI
       setIsSubmissionLocked(newLockStatus);
       
-      // Call the API to update the lock status
-      const result = await toggleNINSubmissionLock(newLockStatus);
+      // Call the API to update the lock status with admin address
+      const result = await toggleNINSubmissionLock(newLockStatus, account);
       
       if (!result.success) {
         // If the API call fails, revert the local state
@@ -198,12 +208,12 @@ export function AdminNinManagement() {
               </TableHeader>
               <TableBody>
                 {users.map((user) => (
-                  <TableRow key={user.id}>
+                  <TableRow key={user.wallet_address}>
                     <TableCell className="font-mono">{user.nin}</TableCell>
                     <TableCell className="font-mono truncate max-w-[120px]">{user.wallet_address}</TableCell>
                     <TableCell>{new Date(user.created_at).toLocaleDateString()}</TableCell>
                     <TableCell>
-                      {user.verification_status === 'Y' ? (
+                      {user.status === 'Y' ? (
                         <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
                           Verified
                         </Badge>
@@ -215,12 +225,12 @@ export function AdminNinManagement() {
                     </TableCell>
                     <TableCell className="text-right">
                       <Button 
-                        variant={user.verification_status === 'Y' ? "destructive" : "default"} 
+                        variant={user.status === 'Y' ? "destructive" : "default"} 
                         size="sm"
-                        onClick={() => handleToggleVerification(user.id, user.verification_status)}
-                        className={user.verification_status === 'Y' ? "" : "bg-green-600 hover:bg-green-700 text-white"}
+                        onClick={() => handleToggleVerification(user.wallet_address, user.status)}
+                        className={user.status === 'Y' ? "" : "bg-green-600 hover:bg-green-700 text-white"}
                       >
-                        {user.verification_status === 'Y' ? (
+                        {user.status === 'Y' ? (
                           <>
                             <XCircle className="h-4 w-4 mr-1" />
                             Revoke

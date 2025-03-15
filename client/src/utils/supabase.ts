@@ -6,19 +6,18 @@ const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS
 
 export const supabase = createClient(supabaseUrl, supabaseKey);
 
-// Type definitions for Supabase tables
+// Type definitions for Supabase tables based on actual database structure
 export interface User {
-  id: string;
   created_at: string;
   wallet_address: string;
   nin: string;
-  verification_status: 'Y' | 'N';
+  status: 'Y' | 'N'; // 'Y' for verified, 'N' for not verified
 }
 
 export interface AdminConfig {
   id: number;
-  created_at: string;
-  nin_submission_locked: boolean;
+  admin_address: string;
+  locked: boolean; // For NIN submission locking
 }
 
 // Helper functions for working with Supabase
@@ -40,7 +39,7 @@ export const getNINByWalletAddress = async (walletAddress: string) => {
 export const checkNINSubmissionLocked = async () => {
   const { data, error } = await supabase
     .from('admin_config')
-    .select('nin_submission_locked')
+    .select('locked')
     .single();
 
   if (error) {
@@ -48,7 +47,7 @@ export const checkNINSubmissionLocked = async () => {
     return false; // Default to unlocked if there's an error
   }
 
-  return data?.nin_submission_locked || false;
+  return data?.locked || false;
 };
 
 export const submitNIN = async (walletAddress: string, nin: string) => {
@@ -83,7 +82,7 @@ export const submitNIN = async (walletAddress: string, nin: string) => {
       { 
         wallet_address: walletAddress, 
         nin: nin,
-        verification_status: 'N' // Default to Not Verified
+        status: 'N' // Default to Not Verified
       }
     ]);
 
@@ -110,11 +109,11 @@ export const getAllNINs = async () => {
   return data as User[];
 };
 
-export const updateNINVerificationStatus = async (userId: string, status: 'Y' | 'N') => {
+export const updateNINVerificationStatus = async (walletAddress: string, status: 'Y' | 'N') => {
   const { data, error } = await supabase
     .from('users')
-    .update({ verification_status: status })
-    .eq('id', userId);
+    .update({ status: status })
+    .eq('wallet_address', walletAddress);
 
   if (error) {
     console.error('Error updating NIN verification status:', error);
@@ -124,7 +123,7 @@ export const updateNINVerificationStatus = async (userId: string, status: 'Y' | 
   return { success: true, data };
 };
 
-export const toggleNINSubmissionLock = async (locked: boolean) => {
+export const toggleNINSubmissionLock = async (locked: boolean, adminAddress: string) => {
   // First check if the config exists
   const { data: existingConfig } = await supabase
     .from('admin_config')
@@ -137,13 +136,16 @@ export const toggleNINSubmissionLock = async (locked: boolean) => {
     // Update existing config
     result = await supabase
       .from('admin_config')
-      .update({ nin_submission_locked: locked })
+      .update({ locked: locked })
       .eq('id', existingConfig.id);
   } else {
-    // Insert new config
+    // Insert new config with required admin_address
     result = await supabase
       .from('admin_config')
-      .insert([{ nin_submission_locked: locked }]);
+      .insert([{ 
+        locked: locked,
+        admin_address: adminAddress
+      }]);
   }
 
   if (result.error) {
