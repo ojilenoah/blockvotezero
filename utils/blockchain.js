@@ -227,3 +227,44 @@ export const hashNIN = async (nin) => {
   const hashHex = '0x' + hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
   return hashHex;
 };
+
+// Get all contract transactions
+export const getContractTransactions = async (startBlock = null) => {
+  const provider = getProvider();
+  const contract = getReadOnlyContract();
+
+  // Get latest block
+  const latestBlock = await provider.getBlockNumber();
+  console.log("Latest block from provider:", latestBlock);
+
+  // Start from latest block if no start block provided
+  const fromBlock = startBlock || Math.max(0, latestBlock - 2000); // Last 2000 blocks
+  const toBlock = latestBlock;
+
+  console.log("Searching blocks from", toBlock, "to", fromBlock);
+
+  // Get all events
+  const events = await contract.queryFilter("*", fromBlock, toBlock);
+
+  // Transform events into transaction info
+  const transactions = await Promise.all(events.map(async (event) => {
+    const tx = await event.getTransaction();
+    const receipt = await event.getTransactionReceipt();
+    const block = await event.getBlock();
+
+    return {
+      hash: tx.hash,
+      from: tx.from,
+      method: event.event || 'Unknown',
+      status: receipt.status ? 'Confirmed' : 'Failed',
+      timestamp: new Date(block.timestamp * 1000),
+      blockNumber: event.blockNumber
+    };
+  }));
+
+  return {
+    transactions: transactions.sort((a, b) => b.blockNumber - a.blockNumber), // Latest first
+    fromBlock,
+    toBlock
+  };
+};
