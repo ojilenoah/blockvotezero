@@ -295,62 +295,25 @@ export default function Explorer() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-6">
-                    {loadingTransactions ? (
-                      <div className="flex justify-center p-8">
-                        <Spinner /> Loading transactions...
-                      </div>
-                    ) : transactions?.transactions.length === 0 ? (
-                      <div className="text-center py-8 text-muted-foreground">
-                        No transactions found
-                      </div>
-                    ) : (
-                      <div className="rounded-md border">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Hash</TableHead>
-                              <TableHead>Method</TableHead>
-                              <TableHead>From</TableHead>
-                              <TableHead>Status</TableHead>
-                              <TableHead>Time</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {transactions?.transactions.map((tx) => (
-                              <TableRow key={tx.hash}>
-                                <TableCell className="font-mono">
-                                  {tx.hash.substring(0, 10)}...
-                                </TableCell>
-                                <TableCell>{tx.method}</TableCell>
-                                <TableCell className="font-mono">
-                                  {tx.from.substring(0, 10)}...
-                                </TableCell>
-                                <TableCell>
-                                  <Badge variant={tx.status === "Confirmed" ? "success" : "destructive"}>
-                                    {tx.status}
-                                  </Badge>
-                                </TableCell>
-                                <TableCell>
-                                  {new Date(tx.timestamp).toLocaleString()}
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    )}
+                    <div className="rounded-md border overflow-hidden">
+                      {/* Using iframe to embed the external blockchain explorer directly */}
+                      <iframe 
+                        src={`https://www.oklink.com/amoy/address/${CONTRACT_ADDRESS}`}
+                        className="w-full"
+                        style={{ height: "600px", border: "none" }}
+                        title="Contract Transactions on OKLink"
+                      ></iframe>
+                    </div>
                     
                     <div className="text-center py-4">
                       <p className="text-sm text-gray-600 mb-4">
-                        Showing recent contract transactions
+                        Showing all transactions from the official blockchain explorer
                       </p>
-                      <Button
-                        variant="outline"
-                        onClick={() => refetch()}
-                        disabled={isFetching}
-                      >
-                        {isFetching ? "Refreshing..." : "Refresh Transactions"}
-                      </Button>
+                      <a
+                        href={`https://www.oklink.com/amoy/address/${CONTRACT_ADDRESS}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline text-sm inline-flex items-center"
                       >
                         <Button variant="outline">
                           Open in new tab for better viewing
