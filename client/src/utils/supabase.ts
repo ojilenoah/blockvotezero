@@ -37,6 +37,7 @@ export const getNINByWalletAddress = async (walletAddress: string) => {
 };
 
 export const checkNINSubmissionLocked = async () => {
+  console.log('Checking NIN submission locked status');
   const { data, error } = await supabase
     .from('admin_config')
     .select('locked')
@@ -44,11 +45,39 @@ export const checkNINSubmissionLocked = async () => {
 
   if (error) {
     console.error('Error checking NIN submission status:', error);
-    return false; // Default to unlocked if there's an error
+    
+    // Check if the error is because no records exist
+    if (error.code === 'PGRST116') {
+      console.log('No admin_config record exists, creating default record');
+      // Create a default admin config record
+      await initializeAdminConfig();
+      return false; // Default to unlocked
+    }
+    
+    return false; // Default to unlocked if there's another error
   }
 
+  console.log('NIN submission locked status:', data?.locked);
   return data?.locked || false;
 };
+
+// Function to initialize admin_config with default values
+async function initializeAdminConfig() {
+  const { error } = await supabase
+    .from('admin_config')
+    .insert([
+      {
+        admin_address: "0x2B3d7c0A2A05f760272165A836D1aDFE8ea38490", // Default admin address
+        locked: false // Default to unlocked
+      }
+    ]);
+  
+  if (error) {
+    console.error('Error initializing admin_config:', error);
+  } else {
+    console.log('Successfully initialized admin_config');
+  }
+}
 
 export const submitNIN = async (walletAddress: string, nin: string) => {
   // First check if this wallet address already has a registered NIN
