@@ -12,12 +12,14 @@ import {
   getAllCandidates,
   getTotalVotes,
   CONTRACT_ADDRESS,
-  getContractTransactions,
+  ALCHEMY_URL,
   type Transaction
 } from "@/utils/blockchain";
 import { useMetaMask } from "@/hooks/use-metamask";
 import { useToast } from "@/hooks/use-toast";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ethers } from "ethers";
+import VotingSystemABI from "../contracts/VotingSystem.json";
 
 interface Election {
   id: number;
@@ -104,17 +106,105 @@ export default function Explorer() {
     refetchInterval: 60000, // Only refetch every minute
   });
 
-  // State for blockchain transaction pagination
-  const [startBlock, setStartBlock] = useState<number | undefined>(undefined);
+  // State for transaction pagination
+  const [currentTxPage, setCurrentTxPage] = useState<number>(1);
+  const [txPerPage] = useState<number>(10);
   
-  // Query for getting transaction data
-  const { data: transactions, isLoading: loadingTransactions, refetch, isFetching } = useQuery({
-    queryKey: ['transactions', { startBlock }], // Using the startBlock state for pagination
-    queryFn: async ({ queryKey }) => {
-      console.log("Fetching transactions with startBlock:", startBlock);
-      // Extract the startBlock from the query key
-      const params = queryKey[1] as { startBlock: number | undefined };
-      return await getContractTransactions(params.startBlock, 10); // Pass startBlock and pageSize
+  // Query for getting transaction data - using the same approach as elections
+  const { data: transactions, isLoading: loadingTransactions, isFetching } = useQuery({
+    queryKey: ['transactions'],
+    queryFn: async () => {
+      console.log("Fetching transactions directly using election data approach");
+      
+      // Get the current active election ID to know how many elections to check
+      const currentElectionId = await getActiveElectionId();
+      console.log("Current election ID:", currentElectionId);
+      
+      const allTransactions: Transaction[] = [];
+      
+      // For each election, get its creation transaction and votes
+      for (let id = 1; id <= Math.max(currentElectionId, 10); id++) {
+        try {
+          // 1. Get the election info first to check if it exists
+          const electionInfo = await getElectionInfo(id);
+          
+          if (electionInfo && electionInfo.name) {
+            console.log(`Found election ${id}: ${electionInfo.name}`);
+            
+            // Get the provider
+            const provider = new ethers.JsonRpcProvider(ALCHEMY_URL);
+            const contract = new ethers.Contract(CONTRACT_ADDRESS, VotingSystemABI.abi, provider);
+            
+            try {
+              // 2. Find the creation transaction for this election
+              const createFilter = contract.filters.ElectionCreated(id);
+              const createEvents = await contract.queryFilter(createFilter);
+              
+              if (createEvents.length > 0) {
+                const event = createEvents[0]; // Get the first matching event
+                const tx = await provider.getTransaction(event.transactionHash);
+                const receipt = await provider.getTransactionReceipt(event.transactionHash);
+                const block = await provider.getBlock(event.blockNumber);
+                
+                if (tx && receipt && block) {
+                  const blockTimestamp = block.timestamp ? Number(block.timestamp) * 1000 : Date.now();
+                  
+                  allTransactions.push({
+                    hash: event.transactionHash,
+                    timestamp: new Date(blockTimestamp),
+                    from: tx.from || "",
+                    to: CONTRACT_ADDRESS,
+                    method: "createElection",
+                    value: tx.value.toString(),
+                    blockNumber: event.blockNumber,
+                    status: receipt.status === 1 ? "Confirmed" : "Failed"
+                  });
+                }
+              }
+              
+              // 3. Find all vote transactions for this election
+              const voteFilter = contract.filters.VoteCast(id);
+              const voteEvents = await contract.queryFilter(voteFilter);
+              
+              for (const event of voteEvents) {
+                const tx = await provider.getTransaction(event.transactionHash);
+                const receipt = await provider.getTransactionReceipt(event.transactionHash);
+                const block = await provider.getBlock(event.blockNumber);
+                
+                if (tx && receipt && block) {
+                  const blockTimestamp = block.timestamp ? Number(block.timestamp) * 1000 : Date.now();
+                  
+                  allTransactions.push({
+                    hash: event.transactionHash,
+                    timestamp: new Date(blockTimestamp),
+                    from: tx.from || "",
+                    to: CONTRACT_ADDRESS,
+                    method: "castVote",
+                    value: "0",
+                    blockNumber: event.blockNumber,
+                    status: receipt.status === 1 ? "Confirmed" : "Failed"
+                  });
+                }
+              }
+            } catch (error) {
+              console.error(`Error getting transactions for election ${id}:`, error);
+            }
+          }
+        } catch (err) {
+          console.error(`Error processing election ${id}:`, err);
+        }
+      }
+      
+      // Sort transactions by block number (newest first)
+      allTransactions.sort((a, b) => b.blockNumber - a.blockNumber);
+      
+      console.log(`Found a total of ${allTransactions.length} transactions`);
+      
+      return {
+        transactions: allTransactions,
+        hasMore: false, // No need for pagination since we load all at once
+        totalTransactions: allTransactions.length
+      };
     },
     staleTime: 30000, // Consider data fresh for 30 seconds
     refetchInterval: 60000, // Only refetch every minute
@@ -274,24 +364,10 @@ export default function Explorer() {
 
                       <div className="mt-6 flex items-center justify-between">
                         <div className="text-sm text-gray-500">
-                          Showing latest blockchain transactions
+                          Showing {transactions.transactions.length} blockchain transactions
                         </div>
                         
-                        {transactions.hasMore && (
-                          <Button
-                            variant="outline"
-                            onClick={() => {
-                              if (transactions.nextBlock) {
-                                // Update the startBlock state to trigger a new query with the next block
-                                console.log("Loading more transactions from block:", transactions.nextBlock);
-                                setStartBlock(transactions.nextBlock);
-                              }
-                            }}
-                            disabled={isFetching}
-                          >
-                            {isFetching ? "Loading..." : "Load More Transactions"}
-                          </Button>
-                        )}
+                        {/* Load more button removed since we load all transactions at once */}
                       </div>
 
                       <div className="flex justify-center pt-4 mt-4 border-t border-gray-200">
