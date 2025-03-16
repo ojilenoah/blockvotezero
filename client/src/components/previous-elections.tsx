@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { getActiveElectionId, getElectionInfo, getTotalVotes } from "@/utils/blockchain";
 import { NoActiveElection } from "@/components/no-active-election";
+import { Button } from "@/components/ui/button";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 interface Election {
   id: number;
@@ -12,9 +14,37 @@ interface Election {
   totalVotes?: number;
 }
 
-export function PreviousElections() {
+interface PreviousElectionsProps {
+  title?: string;
+  itemsPerPage?: number;
+}
+
+export function PreviousElections({ 
+  title = "Previous Elections",
+  itemsPerPage = 4 
+}: PreviousElectionsProps) {
   const [previousElections, setPreviousElections] = useState<Election[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  
+  // Calculate pagination values
+  const totalElections = previousElections.length;
+  const totalPages = Math.ceil(totalElections / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = Math.min(startIndex + itemsPerPage, totalElections);
+  const currentElections = previousElections.slice(startIndex, endIndex);
+  
+  const handleNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+  
+  const handlePrevPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
   
   useEffect(() => {
     const fetchPreviousElections = async () => {
@@ -24,8 +54,8 @@ export function PreviousElections() {
         const elections: Election[] = [];
         
         // Iterate through election IDs (starting from 1)
-        // We'll look for the first 10 elections to avoid too many requests
-        const maxElectionsToFetch = 10;
+        // We'll look for the first 20 elections to avoid too many requests but ensure we have enough for pagination
+        const maxElectionsToFetch = 20;
         
         for (let id = 1; id <= Math.max(currentElectionId, maxElectionsToFetch); id++) {
           // Skip the current active election
@@ -70,7 +100,7 @@ export function PreviousElections() {
   if (isLoading) {
     return (
       <div className="mb-8">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">Previous Elections</h2>
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">{title}</h2>
         <div className="bg-white shadow overflow-hidden sm:rounded-md p-6 text-center text-gray-500">
           Loading previous elections...
         </div>
@@ -81,7 +111,7 @@ export function PreviousElections() {
   if (previousElections.length === 0) {
     return (
       <div className="mb-8">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">Previous Elections</h2>
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">{title}</h2>
         <div className="bg-white shadow sm:rounded-md">
           <div className="p-6">
             <NoActiveElection
@@ -98,10 +128,10 @@ export function PreviousElections() {
   
   return (
     <div className="mb-8">
-      <h2 className="text-xl font-semibold text-gray-900 mb-4">Previous Elections</h2>
+      <h2 className="text-xl font-semibold text-gray-900 mb-4">{title}</h2>
       <div className="bg-white shadow overflow-hidden sm:rounded-md">
         <ul className="divide-y divide-gray-200">
-          {previousElections.map((election) => (
+          {currentElections.map((election) => (
             <li key={election.id}>
               <a href={`/explorer?id=${election.id}`} className="block hover:bg-gray-50">
                 <div className="px-4 py-4 sm:px-6">
@@ -136,6 +166,76 @@ export function PreviousElections() {
             </li>
           ))}
         </ul>
+        
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 bg-gray-50 text-xs sm:px-6">
+            <div className="flex-1 flex justify-between sm:hidden">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handlePrevPage} 
+                disabled={currentPage === 1}
+              >
+                Previous
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleNextPage} 
+                disabled={currentPage === totalPages}
+              >
+                Next
+              </Button>
+            </div>
+            <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm text-gray-700">
+                  Showing <span className="font-medium">{startIndex + 1}</span> to{" "}
+                  <span className="font-medium">{endIndex}</span> of{" "}
+                  <span className="font-medium">{totalElections}</span> elections
+                </p>
+              </div>
+              <div>
+                <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="relative inline-flex items-center px-2 py-2 rounded-l-md border text-sm font-medium"
+                    onClick={handlePrevPage}
+                    disabled={currentPage === 1}
+                  >
+                    <span className="sr-only">Previous</span>
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  
+                  {Array.from({ length: totalPages }).map((_, index) => (
+                    <Button
+                      key={index}
+                      variant={currentPage === index + 1 ? "default" : "outline"}
+                      size="sm"
+                      className="relative inline-flex items-center px-4 py-2 text-sm font-medium"
+                      onClick={() => setCurrentPage(index + 1)}
+                    >
+                      {index + 1}
+                    </Button>
+                  ))}
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="relative inline-flex items-center px-2 py-2 rounded-r-md border text-sm font-medium"
+                    onClick={handleNextPage}
+                    disabled={currentPage === totalPages}
+                  >
+                    <span className="sr-only">Next</span>
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </nav>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
