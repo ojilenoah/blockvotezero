@@ -269,18 +269,35 @@ export const getContractTransactions = async (
     const latestBlock = await provider.getBlockNumber();
     console.log("Latest block from provider:", latestBlock);
     
-    // If no starting block provided, use the latest block
-    const fromBlock = startBlock || Math.max(0, latestBlock - 5000); // Look back 5000 blocks by default
+    // If no starting block provided, use the latest block minus a window
+    const fromBlock = startBlock !== undefined ? startBlock : Math.max(0, latestBlock - 5000); 
     
     // Define a window of blocks to query (for pagination)
     const toBlock = Math.min(latestBlock, fromBlock + 2000);
     
     console.log(`Querying Alchemy API for transactions from block ${fromBlock} to ${toBlock}`);
     
-    // Use Alchemy's API directly to get transactions for address
-    const alchemyUrl = `${ALCHEMY_URL}&method=alchemy_getAssetTransfers&params=[{"fromBlock":"0x${fromBlock.toString(16)}","toBlock":"0x${toBlock.toString(16)}","toAddress":"${CONTRACT_ADDRESS}","category":["external","internal","erc20","erc721","erc1155","specialnft"]}]`;
+    // Use Alchemy's getTransactionReceipts API to get transaction history for our contract
+    const jsonRpcPayload = {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "alchemy_getAssetTransfers",
+      params: [{
+        fromBlock: `0x${fromBlock.toString(16)}`,
+        toBlock: `0x${toBlock.toString(16)}`,
+        toAddress: CONTRACT_ADDRESS,
+        category: ["external", "internal", "erc20", "erc721", "erc1155"]
+      }]
+    };
     
-    const response = await fetch(alchemyUrl);
+    const response = await fetch(ALCHEMY_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(jsonRpcPayload)
+    });
+    
     const data = await response.json();
     console.log("Alchemy API response received");
     

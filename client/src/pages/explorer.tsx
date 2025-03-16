@@ -108,13 +108,13 @@ export default function Explorer() {
   const [startBlock, setStartBlock] = useState<number | undefined>(undefined);
   
   // Query for getting transaction data
-  const { data: transactions, isLoading: loadingTransactions, refetch } = useQuery({
+  const { data: transactions, isLoading: loadingTransactions, refetch, isFetching } = useQuery({
     queryKey: ['transactions', { startBlock }], // Using the startBlock state for pagination
     queryFn: async ({ queryKey }) => {
       console.log("Fetching transactions with startBlock:", startBlock);
       // Extract the startBlock from the query key
       const params = queryKey[1] as { startBlock: number | undefined };
-      return await getContractTransactions(params.startBlock); // Pass startBlock to function
+      return await getContractTransactions(params.startBlock, 10); // Pass startBlock and pageSize
     },
     staleTime: 30000, // Consider data fresh for 30 seconds
     refetchInterval: 60000, // Only refetch every minute
@@ -287,8 +287,9 @@ export default function Explorer() {
                                 setStartBlock(transactions.nextBlock);
                               }
                             }}
+                            disabled={isFetching}
                           >
-                            Load More Transactions
+                            {isFetching ? "Loading..." : "Load More Transactions"}
                           </Button>
                         )}
                       </div>
