@@ -295,25 +295,66 @@ export default function Explorer() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-6">
-                    <div className="rounded-md border overflow-hidden">
-                      {/* Using iframe to embed the external blockchain explorer directly */}
-                      <iframe 
-                        src={`https://www.oklink.com/amoy/address/${CONTRACT_ADDRESS}`}
-                        className="w-full"
-                        style={{ height: "600px", border: "none" }}
-                        title="Contract Transactions on OKLink"
-                      ></iframe>
+                    <div className="rounded-md border">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-b">
+                            <th className="p-3 text-left">Transaction Hash</th>
+                            <th className="p-3 text-left">Method</th>
+                            <th className="p-3 text-left">From</th>
+                            <th className="p-3 text-left">Status</th>
+                            <th className="p-3 text-left">Time</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {transactions?.transactions?.map((tx: any) => (
+                            <tr key={tx.hash} className="border-b">
+                              <td className="p-3">
+                                <a 
+                                  href={`https://www.oklink.com/amoy/tx/${tx.hash}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-primary hover:underline"
+                                >
+                                  {tx.hash.slice(0, 10)}...{tx.hash.slice(-8)}
+                                </a>
+                              </td>
+                              <td className="p-3">{tx.method}</td>
+                              <td className="p-3">
+                                <span title={tx.from}>
+                                  {tx.from.slice(0, 6)}...{tx.from.slice(-4)}
+                                </span>
+                              </td>
+                              <td className="p-3">
+                                <span className={`px-2 py-1 rounded text-xs ${
+                                  tx.status === 'Confirmed' 
+                                    ? 'bg-green-100 text-green-800' 
+                                    : 'bg-red-100 text-red-800'
+                                }`}>
+                                  {tx.status}
+                                </span>
+                              </td>
+                              <td className="p-3">
+                                {new Date(tx.timestamp).toLocaleString()}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                     
-                    <div className="text-center py-4">
-                      <p className="text-sm text-gray-600 mb-4">
-                        Showing all transactions from the official blockchain explorer
+                    <div className="flex justify-between items-center mt-4">
+                      <Button
+                        onClick={() => loadMoreTransactions()}
+                        disabled={!transactions?.hasMore || isLoading}
+                      >
+                        {isLoading ? "Loading..." : "Load More"}
+                      </Button>
+                      <p className="text-sm text-gray-500">
+                        Showing blocks {transactions?.fromBlock} to {transactions?.toBlock}
                       </p>
-                      <a
-                        href={`https://www.oklink.com/amoy/address/${CONTRACT_ADDRESS}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-primary hover:underline text-sm inline-flex items-center"
+                    </div>
+                  </div>
                       >
                         <Button variant="outline">
                           Open in new tab for better viewing
