@@ -294,94 +294,44 @@ export default function Explorer() {
                   </p>
                 </CardHeader>
                 <CardContent>
-                  {loadingTransactions ? (
-                    <div className="text-center py-8">
-                      <p className="text-gray-500">Loading transactions from blockchain...</p>
+                  <div className="space-y-6">
+                    <div className="rounded-md border overflow-hidden">
+                      {/* Using iframe to embed the external blockchain explorer directly */}
+                      <iframe 
+                        src={`https://www.oklink.com/amoy/address/${CONTRACT_ADDRESS}`}
+                        className="w-full"
+                        style={{ height: "600px", border: "none" }}
+                        title="Contract Transactions on OKLink"
+                      ></iframe>
                     </div>
-                  ) : !transactions?.transactions.length ? (
-                    <div className="text-center py-8">
-                      <p className="text-gray-500">No transactions found</p>
+                    
+                    <div className="text-center py-4">
+                      <p className="text-sm text-gray-600 mb-4">
+                        Showing all transactions from the official blockchain explorer
+                      </p>
+                      <a
+                        href={`https://www.oklink.com/amoy/address/${CONTRACT_ADDRESS}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline text-sm inline-flex items-center"
+                      >
+                        <Button variant="outline">
+                          Open in new tab for better viewing
+                        </Button>
+                      </a>
                     </div>
-                  ) : (
-                    <>
-                      <div className="rounded-md border overflow-hidden">
-                        <table className="min-w-full divide-y divide-gray-200">
-                          <thead className="bg-gray-50">
-                            <tr>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Transaction</th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Method</th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">From/To</th>
-                              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Block</th>
-                              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Status</th>
-                            </tr>
-                          </thead>
-                          <tbody className="bg-white divide-y divide-gray-200">
-                            {transactions.transactions.map((tx) => (
-                              <tr key={tx.hash} className="hover:bg-gray-50">
-                                <td className="px-4 py-3 text-sm">
-                                  <div>
-                                    <a 
-                                      href={`https://www.oklink.com/amoy/tx/${tx.hash}`}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-primary hover:underline font-mono text-xs truncate block max-w-[120px] sm:max-w-[200px] md:max-w-[250px]"
-                                    >
-                                      {tx.hash}
-                                    </a>
-                                    <span className="text-xs text-gray-500">{tx.timestamp.toLocaleString()}</span>
-                                  </div>
-                                </td>
-                                <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                                  {tx.method}
-                                </td>
-                                <td className="px-4 py-3 text-sm">
-                                  <div className="flex flex-col">
-                                    {tx.from && (
-                                      <span className="text-xs">From: {formatAddress(tx.from)}</span>
-                                    )}
-                                    {tx.to && (
-                                      <span className="text-xs">To: {formatAddress(tx.to)}</span>
-                                    )}
-                                  </div>
-                                </td>
-                                <td className="px-4 py-3 text-sm text-right text-gray-500">
-                                  {tx.blockNumber}
-                                </td>
-                                <td className="px-4 py-3 text-sm text-right">
-                                  <span className={`inline-flex px-2 text-xs font-semibold leading-5 rounded-full ${
-                                    tx.status === "Confirmed" 
-                                      ? "bg-green-100 text-green-800" 
-                                      : "bg-red-100 text-red-800"
-                                  }`}>
-                                    {tx.status}
-                                  </span>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-
-                      <div className="mt-6 flex items-center justify-between">
-                        <div className="text-sm text-gray-500">
-                          Showing {transactions.transactions.length} blockchain transactions
-                        </div>
-                        
-                        {/* Load more button removed since we load all transactions at once */}
-                      </div>
-
-                      <div className="flex justify-center pt-4 mt-4 border-t border-gray-200">
-                        <a
-                          href={`https://www.oklink.com/amoy/address/${CONTRACT_ADDRESS}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-primary hover:underline text-sm"
-                        >
-                          View all transactions on blockchain explorer →
-                        </a>
-                      </div>
-                    </>
-                  )}
+                    
+                    <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+                      <h3 className="text-lg font-medium text-blue-800 mb-2">About this Contract</h3>
+                      <p className="text-sm text-blue-700 mb-2">
+                        Contract Address: <span className="font-mono">{CONTRACT_ADDRESS}</span>
+                      </p>
+                      <p className="text-sm text-blue-700">
+                        This contract manages all voting operations on the Polygon Amoy testnet, including
+                        election creation, vote casting, and election result storage.
+                      </p>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
             </TabsContent>
