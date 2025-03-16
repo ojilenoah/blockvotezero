@@ -360,6 +360,8 @@ export default function Explorer() {
                           Open in new tab for better viewing
                         </Button>
                       </a>
+                        </Button>
+                      </a>
                     </div>
                     
                     <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
