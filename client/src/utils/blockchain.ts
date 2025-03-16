@@ -256,120 +256,118 @@ export interface Election {
   endTime: string;
 }
 
-// Get transactions for our contract
+// Get transactions for our contract using Alchemy API
 export const getContractTransactions = async (
   startBlock?: number,
-  pageSize: number = 15
+  pageSize: number = 10
 ): Promise<PaginatedTransactions> => {
   try {
     console.log("Starting getContractTransactions with startBlock:", startBlock);
     const provider = getProvider();
-    const transactions: Transaction[] = [];
-
+    
     // Get latest block
     const latestBlock = await provider.getBlockNumber();
     console.log("Latest block from provider:", latestBlock);
-
-    // Calculate the starting block - if not provided, start from latest
-    const currentStartBlock = startBlock || latestBlock;
-
-    // Look back 2000 blocks at a time for more comprehensive history
-    const endBlock = Math.max(0, currentStartBlock - 2000);
-
-    console.log(`Searching blocks from ${currentStartBlock} to ${endBlock}`);
-
-    // For each block in range, check transactions
-    for (let i = currentStartBlock; i >= endBlock && transactions.length < pageSize; i--) {
-      try {
-        const block = await provider.getBlock(i, true);
-        if (!block || !block.transactions) continue;
-
-        // Filter transactions involving our contract
-        for (const tx of block.transactions) {
-          if (!tx || typeof tx === 'string') continue;
-
-          const transaction = tx as ethers.Transaction;
-
-          const txTo = transaction.to ? transaction.to.toLowerCase() : '';
-          const txFrom = transaction.from ? transaction.from.toLowerCase() : '';
-          const contractAddressLower = CONTRACT_ADDRESS.toLowerCase();
-          
-          if (txTo === contractAddressLower || txFrom === contractAddressLower) {
-            try {
-              // Make sure transaction hash exists before proceeding
-              if (!transaction.hash) {
-                console.warn("Transaction missing hash, skipping");
-                continue;
-              }
-              
-              const receipt = await provider.getTransactionReceipt(transaction.hash);
-              if (!receipt) continue;
-
-              // Try to decode the transaction input data
-              let method = "Contract Interaction";
-              const methodId = transaction.data && transaction.data.length >= 10 
-                ? transaction.data.slice(0, 10).toLowerCase() 
-                : "";
-
-              // Map common method IDs to human-readable names
-              const methodMap: { [key: string]: string } = {
-                "0x9112c1eb": "createElection",
-                "0x0121b93f": "castVote",
-                "0xa3ec138d": "changeAdmin",
-                "0x8da5cb5b": "owner",
-                "0x8456cb59": "pause",
-                "0x3f4ba83a": "unpause",
-                "0x5c975abb": "paused"
-              };
-
-              if (methodId && methodMap[methodId]) {
-                method = methodMap[methodId];
-              }
-
-              const blockTimestamp = block.timestamp ? Number(block.timestamp) * 1000 : Date.now();
-              const blockNumber = block.number ? Number(block.number) : 0;
-
-              console.log(`Found transaction: ${transaction.hash} in block ${blockNumber}`);
-
-              const transactionInfo: Transaction = {
-                hash: transaction.hash,
-                timestamp: new Date(blockTimestamp),
-                from: transaction.from || "",
-                to: transaction.to || "",
-                method,
-                value: transaction.value.toString(),
-                blockNumber: blockNumber,
-                status: receipt.status === 1 ? "Confirmed" : "Failed"
-              };
-              
-              // Add to transactions array inside the try block
-              transactions.push(transactionInfo);
-              
-              // Check if we've reached the page size limit
-              if (transactions.length >= pageSize) {
-                console.log(`Reached page size limit of ${pageSize} transactions`);
-                break;
-              }
-            } catch (receiptError) {
-              console.error(`Error getting receipt for transaction ${transaction.hash}:`, receiptError);
-              continue;
-            }
-
-            // This check was moved inside the try block where we push to transactions array
+    
+    // If no starting block provided, use the latest block
+    const fromBlock = startBlock || Math.max(0, latestBlock - 5000); // Look back 5000 blocks by default
+    
+    // Define a window of blocks to query (for pagination)
+    const toBlock = Math.min(latestBlock, fromBlock + 2000);
+    
+    console.log(`Querying Alchemy API for transactions from block ${fromBlock} to ${toBlock}`);
+    
+    // Use Alchemy's API directly to get transactions for address
+    const alchemyUrl = `${ALCHEMY_URL}&method=alchemy_getAssetTransfers&params=[{"fromBlock":"0x${fromBlock.toString(16)}","toBlock":"0x${toBlock.toString(16)}","toAddress":"${CONTRACT_ADDRESS}","category":["external","internal","erc20","erc721","erc1155","specialnft"]}]`;
+    
+    const response = await fetch(alchemyUrl);
+    const data = await response.json();
+    console.log("Alchemy API response received");
+    
+    // Process the transactions from Alchemy API
+    const transactions: Transaction[] = [];
+    
+    if (data && data.result && data.result.transfers) {
+      console.log(`Found ${data.result.transfers.length} transfers from Alchemy`);
+      
+      // Process each transfer
+      for (const transfer of data.result.transfers) {
+        try {
+          if (!transfer.hash) {
+            console.warn("Transfer missing hash, skipping");
+            continue;
           }
+          
+          // Get full transaction details
+          const tx = await provider.getTransaction(transfer.hash);
+          if (!tx) continue;
+          
+          // Get receipt for status
+          const receipt = await provider.getTransactionReceipt(transfer.hash);
+          if (!receipt) continue;
+          
+          // Try to decode the transaction input data
+          let method = "Contract Interaction";
+          const methodId = tx.data && tx.data.length >= 10 
+            ? tx.data.slice(0, 10).toLowerCase() 
+            : "";
+          
+          // Map common method IDs to human-readable names
+          const methodMap: { [key: string]: string } = {
+            "0x9112c1eb": "createElection",
+            "0x0121b93f": "castVote",
+            "0xa3ec138d": "changeAdmin",
+            "0x8da5cb5b": "owner",
+            "0x8456cb59": "pause",
+            "0x3f4ba83a": "unpause",
+            "0x5c975abb": "paused"
+          };
+          
+          if (methodId && methodMap[methodId]) {
+            method = methodMap[methodId];
+          }
+          
+          // Get block for timestamp
+          const block = await provider.getBlock(receipt.blockNumber);
+          const blockTimestamp = block && block.timestamp ? Number(block.timestamp) * 1000 : Date.now();
+          
+          console.log(`Processing transaction: ${transfer.hash} in block ${receipt.blockNumber}`);
+          
+          const transactionInfo: Transaction = {
+            hash: transfer.hash,
+            timestamp: new Date(blockTimestamp),
+            from: transfer.from || "",
+            to: transfer.to || "",
+            method,
+            value: transfer.value || "0",
+            blockNumber: receipt.blockNumber,
+            status: receipt.status === 1 ? "Confirmed" : "Failed"
+          };
+          
+          transactions.push(transactionInfo);
+          
+          // Limit to page size
+          if (transactions.length >= pageSize) {
+            console.log(`Reached page size limit of ${pageSize} transactions`);
+            break;
+          }
+        } catch (txError) {
+          console.error(`Error processing transaction ${transfer.hash}:`, txError);
+          continue;
         }
-      } catch (blockError) {
-        console.error(`Error processing block ${i}:`, blockError);
-        continue;
       }
+    } else {
+      console.log("No transfers found in Alchemy API response or invalid response format");
     }
-
-    // Sort transactions by timestamp (newest first)
-    transactions.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-
+    
+    // Sort transactions by block number (newest first)
+    transactions.sort((a, b) => b.blockNumber - a.blockNumber);
+    
     // Determine if there are more transactions to load
-    const hasMore = endBlock > 0;
-    const nextBlock = hasMore ? endBlock - 1 : undefined;
+    // We use the block number of the oldest transaction as the next starting point
+    const oldestTx = transactions.length > 0 ? transactions[transactions.length - 1] : null;
+    const hasMore = transactions.length >= pageSize;
+    const nextBlock = hasMore && oldestTx ? oldestTx.blockNumber - 1 : undefined;
 
     return {
       transactions,

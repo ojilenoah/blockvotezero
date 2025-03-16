@@ -1,6 +1,7 @@
 import { Navbar } from "@/components/navbar";
 import { ElectionStatus } from "@/components/election-status";
 import { ElectionInfoCard } from "@/components/election-info-card";
+import { LastElectionWinner } from "@/components/last-election-winner";
 import { PreviousElections } from "@/components/previous-elections";
 import { BlockchainTransparency } from "@/components/blockchain-transparency";
 import { Footer } from "@/components/footer";
@@ -13,7 +14,13 @@ export default function Home() {
       <main className="flex-grow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <ElectionStatus />
-          <ElectionInfoCard />
+          
+          {/* Election info and last winner cards in a grid layout */}
+          <div className="grid md:grid-cols-2 gap-6 mb-8">
+            <ElectionInfoCard />
+            <LastElectionWinner />
+          </div>
+          
           <PreviousElections />
           <BlockchainTransparency />
         </div>
