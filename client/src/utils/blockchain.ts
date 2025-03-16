@@ -262,11 +262,13 @@ export const getContractTransactions = async (
   pageSize: number = 15
 ): Promise<PaginatedTransactions> => {
   try {
+    console.log("Starting getContractTransactions with startBlock:", startBlock);
     const provider = getProvider();
     const transactions: Transaction[] = [];
 
     // Get latest block
     const latestBlock = await provider.getBlockNumber();
+    console.log("Latest block from provider:", latestBlock);
 
     // Calculate the starting block - if not provided, start from latest
     const currentStartBlock = startBlock || latestBlock;
@@ -288,44 +290,72 @@ export const getContractTransactions = async (
 
           const transaction = tx as ethers.Transaction;
 
-          if (
-            transaction.to?.toLowerCase() === CONTRACT_ADDRESS.toLowerCase() ||
-            transaction.from?.toLowerCase() === CONTRACT_ADDRESS.toLowerCase()
-          ) {
-            const receipt = await provider.getTransactionReceipt(transaction.hash);
-            if (!receipt) continue;
+          const txTo = transaction.to ? transaction.to.toLowerCase() : '';
+          const txFrom = transaction.from ? transaction.from.toLowerCase() : '';
+          const contractAddressLower = CONTRACT_ADDRESS.toLowerCase();
+          
+          if (txTo === contractAddressLower || txFrom === contractAddressLower) {
+            try {
+              // Make sure transaction hash exists before proceeding
+              if (!transaction.hash) {
+                console.warn("Transaction missing hash, skipping");
+                continue;
+              }
+              
+              const receipt = await provider.getTransactionReceipt(transaction.hash);
+              if (!receipt) continue;
 
-            // Try to decode the transaction input data
-            let method = "Contract Interaction";
-            const methodId = transaction.data.slice(0, 10).toLowerCase();
+              // Try to decode the transaction input data
+              let method = "Contract Interaction";
+              const methodId = transaction.data && transaction.data.length >= 10 
+                ? transaction.data.slice(0, 10).toLowerCase() 
+                : "";
 
-            // Map common method IDs to human-readable names
-            const methodMap: { [key: string]: string } = {
-              "0x9112c1eb": "createElection",
-              "0x0121b93f": "castVote",
-              "0xa3ec138d": "changeAdmin",
-              "0x8da5cb5b": "owner",
-              "0x8456cb59": "pause",
-              "0x3f4ba83a": "unpause",
-              "0x5c975abb": "paused"
-            };
+              // Map common method IDs to human-readable names
+              const methodMap: { [key: string]: string } = {
+                "0x9112c1eb": "createElection",
+                "0x0121b93f": "castVote",
+                "0xa3ec138d": "changeAdmin",
+                "0x8da5cb5b": "owner",
+                "0x8456cb59": "pause",
+                "0x3f4ba83a": "unpause",
+                "0x5c975abb": "paused"
+              };
 
-            method = methodMap[methodId] || method;
+              if (methodId && methodMap[methodId]) {
+                method = methodMap[methodId];
+              }
 
-            const transactionInfo: Transaction = {
-              hash: transaction.hash,
-              timestamp: new Date(Number(block.timestamp) * 1000),
-              from: transaction.from || "",
-              to: transaction.to || "",
-              method,
-              value: transaction.value.toString(),
-              blockNumber: Number(block.number || 0),
-              status: receipt.status === 1 ? "Confirmed" : "Failed"
-            };
+              const blockTimestamp = block.timestamp ? Number(block.timestamp) * 1000 : Date.now();
+              const blockNumber = block.number ? Number(block.number) : 0;
 
-            transactions.push(transactionInfo);
+              console.log(`Found transaction: ${transaction.hash} in block ${blockNumber}`);
 
-            if (transactions.length >= pageSize) break;
+              const transactionInfo: Transaction = {
+                hash: transaction.hash,
+                timestamp: new Date(blockTimestamp),
+                from: transaction.from || "",
+                to: transaction.to || "",
+                method,
+                value: transaction.value.toString(),
+                blockNumber: blockNumber,
+                status: receipt.status === 1 ? "Confirmed" : "Failed"
+              };
+              
+              // Add to transactions array inside the try block
+              transactions.push(transactionInfo);
+              
+              // Check if we've reached the page size limit
+              if (transactions.length >= pageSize) {
+                console.log(`Reached page size limit of ${pageSize} transactions`);
+                break;
+              }
+            } catch (receiptError) {
+              console.error(`Error getting receipt for transaction ${transaction.hash}:`, receiptError);
+              continue;
+            }
+
+            // This check was moved inside the try block where we push to transactions array
           }
         }
       } catch (blockError) {
