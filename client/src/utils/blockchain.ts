@@ -256,7 +256,7 @@ export interface Election {
   endTime: string;
 }
 
-// Get transactions for our contract using Alchemy API
+// Get transactions for our contract - Direct block scanning implementation
 export const getContractTransactions = async (
   startBlock?: number,
   pageSize: number = 10
@@ -264,126 +264,114 @@ export const getContractTransactions = async (
   try {
     console.log("Starting getContractTransactions with startBlock:", startBlock);
     const provider = getProvider();
+    const contract = new ethers.Contract(CONTRACT_ADDRESS, VotingSystemABI, provider);
     
     // Get latest block
     const latestBlock = await provider.getBlockNumber();
     console.log("Latest block from provider:", latestBlock);
     
-    // If no starting block provided, use the latest block minus a window
-    const fromBlock = startBlock !== undefined ? startBlock : Math.max(0, latestBlock - 5000); 
+    // If no starting block provided, use the latest block minus a window to scan
+    const blockWindow = 1000; // Scan 1000 blocks at most
+    const fromBlock = startBlock !== undefined 
+      ? startBlock 
+      : Math.max(0, latestBlock - blockWindow);
     
-    // Define a window of blocks to query (for pagination)
-    const toBlock = Math.min(latestBlock, fromBlock + 2000);
+    // Calculate end block - ensuring we don't go beyond the latest block
+    const endBlock = Math.max(0, fromBlock - blockWindow); // Go backward in blocks
     
-    console.log(`Querying Alchemy API for transactions from block ${fromBlock} to ${toBlock}`);
+    console.log(`Scanning from block ${fromBlock} down to ${endBlock}`);
     
-    // Use Alchemy's getTransactionReceipts API to get transaction history for our contract
-    const jsonRpcPayload = {
-      jsonrpc: "2.0",
-      id: 1,
-      method: "alchemy_getAssetTransfers",
-      params: [{
-        fromBlock: `0x${fromBlock.toString(16)}`,
-        toBlock: `0x${toBlock.toString(16)}`,
-        toAddress: CONTRACT_ADDRESS,
-        category: ["external", "internal", "erc20", "erc721", "erc1155"]
-      }]
-    };
-    
-    const response = await fetch(ALCHEMY_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(jsonRpcPayload)
-    });
-    
-    const data = await response.json();
-    console.log("Alchemy API response received");
-    
-    // Process the transactions from Alchemy API
+    // Prepare to collect transactions
     const transactions: Transaction[] = [];
     
-    if (data && data.result && data.result.transfers) {
-      console.log(`Found ${data.result.transfers.length} transfers from Alchemy`);
+    // Method signature to method name mapping
+    const methodMap: { [key: string]: string } = {
+      "0x9112c1eb": "createElection",
+      "0x0121b93f": "castVote",
+      "0xa3ec138d": "changeAdmin",
+      "0x8da5cb5b": "owner",
+      "0x8456cb59": "pause",
+      "0x3f4ba83a": "unpause",
+      "0x5c975abb": "paused"
+    };
+    
+    // Fetch events from the contract (much more reliable than scanning all blocks)
+    console.log("Querying contract events...");
+    
+    // Get CreateElection events
+    try {
+      const createFilter = contract.filters.ElectionCreated();
+      const createEvents = await contract.queryFilter(createFilter, endBlock, fromBlock);
+      console.log(`Found ${createEvents.length} ElectionCreated events`);
       
-      // Process each transfer
-      for (const transfer of data.result.transfers) {
-        try {
-          if (!transfer.hash) {
-            console.warn("Transfer missing hash, skipping");
-            continue;
-          }
+      // Process each event
+      for (const event of createEvents) {
+        if (transactions.length >= pageSize) break;
+        
+        const tx = await provider.getTransaction(event.transactionHash);
+        const receipt = await provider.getTransactionReceipt(event.transactionHash);
+        const block = await provider.getBlock(event.blockNumber);
+        
+        if (tx && receipt && block) {
+          const blockTimestamp = block.timestamp ? Number(block.timestamp) * 1000 : Date.now();
           
-          // Get full transaction details
-          const tx = await provider.getTransaction(transfer.hash);
-          if (!tx) continue;
-          
-          // Get receipt for status
-          const receipt = await provider.getTransactionReceipt(transfer.hash);
-          if (!receipt) continue;
-          
-          // Try to decode the transaction input data
-          let method = "Contract Interaction";
-          const methodId = tx.data && tx.data.length >= 10 
-            ? tx.data.slice(0, 10).toLowerCase() 
-            : "";
-          
-          // Map common method IDs to human-readable names
-          const methodMap: { [key: string]: string } = {
-            "0x9112c1eb": "createElection",
-            "0x0121b93f": "castVote",
-            "0xa3ec138d": "changeAdmin",
-            "0x8da5cb5b": "owner",
-            "0x8456cb59": "pause",
-            "0x3f4ba83a": "unpause",
-            "0x5c975abb": "paused"
-          };
-          
-          if (methodId && methodMap[methodId]) {
-            method = methodMap[methodId];
-          }
-          
-          // Get block for timestamp
-          const block = await provider.getBlock(receipt.blockNumber);
-          const blockTimestamp = block && block.timestamp ? Number(block.timestamp) * 1000 : Date.now();
-          
-          console.log(`Processing transaction: ${transfer.hash} in block ${receipt.blockNumber}`);
-          
-          const transactionInfo: Transaction = {
-            hash: transfer.hash,
+          transactions.push({
+            hash: event.transactionHash,
             timestamp: new Date(blockTimestamp),
-            from: transfer.from || "",
-            to: transfer.to || "",
-            method,
-            value: transfer.value || "0",
-            blockNumber: receipt.blockNumber,
+            from: tx.from || "",
+            to: CONTRACT_ADDRESS,
+            method: "createElection",
+            value: tx.value.toString(),
+            blockNumber: event.blockNumber,
             status: receipt.status === 1 ? "Confirmed" : "Failed"
-          };
-          
-          transactions.push(transactionInfo);
-          
-          // Limit to page size
-          if (transactions.length >= pageSize) {
-            console.log(`Reached page size limit of ${pageSize} transactions`);
-            break;
-          }
-        } catch (txError) {
-          console.error(`Error processing transaction ${transfer.hash}:`, txError);
-          continue;
+          });
         }
       }
-    } else {
-      console.log("No transfers found in Alchemy API response or invalid response format");
+    } catch (error) {
+      console.error("Error getting ElectionCreated events:", error);
+    }
+    
+    // Get Vote events if we still have space
+    if (transactions.length < pageSize) {
+      try {
+        const voteFilter = contract.filters.VoteCast();
+        const voteEvents = await contract.queryFilter(voteFilter, endBlock, fromBlock);
+        console.log(`Found ${voteEvents.length} VoteCast events`);
+        
+        // Process each event
+        for (const event of voteEvents) {
+          if (transactions.length >= pageSize) break;
+          
+          const tx = await provider.getTransaction(event.transactionHash);
+          const receipt = await provider.getTransactionReceipt(event.transactionHash);
+          const block = await provider.getBlock(event.blockNumber);
+          
+          if (tx && receipt && block) {
+            const blockTimestamp = block.timestamp ? Number(block.timestamp) * 1000 : Date.now();
+            
+            transactions.push({
+              hash: event.transactionHash,
+              timestamp: new Date(blockTimestamp),
+              from: tx.from || "",
+              to: CONTRACT_ADDRESS,
+              method: "castVote",
+              value: "0",
+              blockNumber: event.blockNumber,
+              status: receipt.status === 1 ? "Confirmed" : "Failed"
+            });
+          }
+        }
+      } catch (error) {
+        console.error("Error getting VoteCast events:", error);
+      }
     }
     
     // Sort transactions by block number (newest first)
     transactions.sort((a, b) => b.blockNumber - a.blockNumber);
     
     // Determine if there are more transactions to load
-    // We use the block number of the oldest transaction as the next starting point
     const oldestTx = transactions.length > 0 ? transactions[transactions.length - 1] : null;
-    const hasMore = transactions.length >= pageSize;
+    const hasMore = transactions.length > 0 && endBlock > 0;
     const nextBlock = hasMore && oldestTx ? oldestTx.blockNumber - 1 : undefined;
 
     return {
