@@ -3,7 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
 import { NinLoginForm } from "@/components/nin-login-form";
-import { LivenessCheck } from "@/components/liveness-check";
 import { UserInfoCard } from "@/components/user-info-card";
 import { CandidateGrid } from "@/components/candidate-grid";
 import { Button } from "@/components/ui/button";
@@ -16,7 +15,6 @@ import type { Candidate } from "@/types/candidate";
 
 enum VotingStep {
   NIN_ENTRY,
-  LIVENESS_CHECK,
   CANDIDATE_SELECTION,
   TRANSACTION_CONFIRMATION
 }
@@ -155,14 +153,9 @@ export default function Vote() {
           <NinLoginForm 
             onComplete={(nin: string) => {
               setVoterNIN(nin);
-              setCurrentStep(VotingStep.LIVENESS_CHECK);
+              setCurrentStep(VotingStep.CANDIDATE_SELECTION);
             }} 
           />
-        );
-
-      case VotingStep.LIVENESS_CHECK:
-        return (
-          <LivenessCheck onComplete={() => setCurrentStep(VotingStep.CANDIDATE_SELECTION)} />
         );
 
       case VotingStep.CANDIDATE_SELECTION:

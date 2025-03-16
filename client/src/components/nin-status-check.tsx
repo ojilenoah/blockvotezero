@@ -2,11 +2,9 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CheckCircle, XCircle, Clock } from "lucide-react";
+import { CheckCircle, Wallet } from "lucide-react";
 import { useMetaMask } from "@/hooks/use-metamask";
 import { getNINByWalletAddress, User } from "@/utils/supabase";
-import { PhantomWalletButton } from "@/components/phantom-wallet-button";
 
 export function NinStatusCheck() {
   const { isConnected, account, connect } = useMetaMask();
@@ -47,14 +45,14 @@ export function NinStatusCheck() {
       return (
         <div className="flex items-center p-3 text-green-700 bg-green-50 rounded-md">
           <CheckCircle className="h-5 w-5 mr-2" />
-          <span className="font-medium">Verified</span>
+          <span className="font-medium">Voted</span>
         </div>
       );
     } else {
       return (
-        <div className="flex items-center p-3 text-amber-700 bg-amber-50 rounded-md">
-          <Clock className="h-5 w-5 mr-2" />
-          <span className="font-medium">Pending Verification</span>
+        <div className="flex items-center p-3 text-blue-700 bg-blue-50 rounded-md">
+          <CheckCircle className="h-5 w-5 mr-2" />
+          <span className="font-medium">Registered</span>
         </div>
       );
     }
@@ -63,9 +61,9 @@ export function NinStatusCheck() {
   return (
     <Card className="w-full max-w-md mx-auto">
       <CardHeader>
-        <CardTitle>NIN Verification Status</CardTitle>
+        <CardTitle>NIN Status Check</CardTitle>
         <CardDescription>
-          Check the verification status of your National Identification Number.
+          Check the status of your National Identification Number.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -74,58 +72,18 @@ export function NinStatusCheck() {
             <Alert className="bg-yellow-50 border-yellow-200">
               <AlertTitle>Wallet Connection Required</AlertTitle>
               <AlertDescription>
-                Connect your wallet to check your NIN verification status.
+                Connect your wallet to check your NIN status.
               </AlertDescription>
             </Alert>
             
-            <Tabs defaultValue="metamask" className="w-full">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="metamask">MetaMask</TabsTrigger>
-                <TabsTrigger value="phantom">Phantom</TabsTrigger>
-              </TabsList>
-              
-              <TabsContent value="metamask" className="mt-4">
-                <Button 
-                  onClick={connect} 
-                  className="w-full"
-                  variant="outline"
-                >
-                  <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 35 33" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M32.9582 1L17.9582 10.0000L16.9582 4.8369L32.9582 1Z" fill="#E17726" stroke="#E17726" strokeWidth="0.25" strokeLinecap="round" strokeLinejoin="round"/>
-                    <path d="M2.83203 1L17.6514 10.0000L18.8329 4.8369L2.83203 1Z" fill="#E27625" stroke="#E27625" strokeWidth="0.25" strokeLinecap="round" strokeLinejoin="round"/>
-                    <path d="M28.2783 23.5088L24.7334 28.7866L32.0894 30.7866L34.1761 23.6369L28.2783 23.5088Z" fill="#E27625" stroke="#E27625" strokeWidth="0.25" strokeLinecap="round" strokeLinejoin="round"/>
-                    <path d="M1.62695 23.6292L3.70728 30.7789L11.0567 28.7789L7.51837 23.5011L1.62695 23.6292Z" fill="#E27625" stroke="#E27625" strokeWidth="0.25" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                  Connect with MetaMask
-                </Button>
-              </TabsContent>
-              
-              <TabsContent value="phantom" className="mt-4">
-                <PhantomWalletButton 
-                  onConnect={(address) => {
-                    // Directly handle the Phantom wallet address without simulating MetaMask
-                    setLoading(true);
-                    
-                    // Get NIN status for this address
-                    getNINByWalletAddress(address)
-                      .then(result => {
-                        if (result) {
-                          setUserDetails(result);
-                        } else {
-                          setUserDetails(null);
-                        }
-                      })
-                      .catch(err => {
-                        console.error("Error fetching NIN status:", err);
-                        setError("Failed to fetch NIN status. Please try again.");
-                      })
-                      .finally(() => {
-                        setLoading(false);
-                      });
-                  }}
-                />
-              </TabsContent>
-            </Tabs>
+            <Button 
+              onClick={connect} 
+              className="w-full"
+              variant="outline"
+            >
+              <Wallet className="h-5 w-5 mr-2" />
+              Connect Wallet
+            </Button>
           </div>
         ) : loading ? (
           <div className="flex justify-center p-6">
@@ -164,7 +122,7 @@ export function NinStatusCheck() {
             </div>
             
             <div className="space-y-2">
-              <p className="text-sm text-slate-700">Verification Status:</p>
+              <p className="text-sm text-slate-700">Status:</p>
               {renderStatusBadge()}
             </div>
             
