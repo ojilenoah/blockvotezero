@@ -259,7 +259,7 @@ export interface Election {
 // Get transactions for our contract
 export const getContractTransactions = async (
   startBlock?: number,
-  pageSize: number = 10
+  pageSize: number = 15
 ): Promise<PaginatedTransactions> => {
   try {
     const provider = getProvider();
@@ -271,8 +271,8 @@ export const getContractTransactions = async (
     // Calculate the starting block - if not provided, start from latest
     const currentStartBlock = startBlock || latestBlock;
 
-    // Look back 1000 blocks at a time for more comprehensive history
-    const endBlock = Math.max(0, currentStartBlock - 1000);
+    // Look back 2000 blocks at a time for more comprehensive history
+    const endBlock = Math.max(0, currentStartBlock - 2000);
 
     console.log(`Searching blocks from ${currentStartBlock} to ${endBlock}`);
 
@@ -303,7 +303,11 @@ export const getContractTransactions = async (
             const methodMap: { [key: string]: string } = {
               "0x9112c1eb": "createElection",
               "0x0121b93f": "castVote",
-              "0xa3ec138d": "changeAdmin"
+              "0xa3ec138d": "changeAdmin",
+              "0x8da5cb5b": "owner",
+              "0x8456cb59": "pause",
+              "0x3f4ba83a": "unpause",
+              "0x5c975abb": "paused"
             };
 
             method = methodMap[methodId] || method;
@@ -315,7 +319,7 @@ export const getContractTransactions = async (
               to: transaction.to || "",
               method,
               value: transaction.value.toString(),
-              blockNumber: Number(block.number),
+              blockNumber: Number(block.number || 0),
               status: receipt.status === 1 ? "Confirmed" : "Failed"
             };
 

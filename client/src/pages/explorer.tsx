@@ -108,8 +108,9 @@ export default function Explorer() {
   const { data: transactions, isLoading: loadingTransactions, refetch } = useQuery({
     queryKey: ['transactions', { startBlock: 0 }], //Added startBlock for pagination
     queryFn: async ({ queryKey }) => {
-      const [, { startBlock }] = queryKey;
-      return await getContractTransactions(startBlock); //Pass startBlock to function
+      // Extract the startBlock from the query key
+      const params = queryKey[1] as { startBlock: number };
+      return await getContractTransactions(params.startBlock); //Pass startBlock to function
     },
     staleTime: 30000, // Consider data fresh for 30 seconds
     refetchInterval: 60000, // Only refetch every minute
@@ -192,8 +193,11 @@ export default function Explorer() {
 
             <TabsContent value="latest">
               <Card>
-                <CardHeader>
+                <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle>Contract Transactions</CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    POLYGON AMOY NETWORK
+                  </p>
                 </CardHeader>
                 <CardContent>
                   {loadingTransactions ? (
@@ -206,57 +210,90 @@ export default function Explorer() {
                     </div>
                   ) : (
                     <>
-                      <div className="space-y-4">
-                        {transactions.transactions.map((tx) => (
-                          <div key={tx.hash} className="border-b border-gray-200 pb-4 last:border-b-0 last:pb-0">
-                            <div className="flex justify-between items-start">
-                              <div>
-                                <p className="text-sm font-medium text-primary">
+                      <div className="rounded-md border overflow-hidden">
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Transaction</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Method</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">From/To</th>
+                              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Block</th>
+                              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {transactions.transactions.map((tx) => (
+                              <tr key={tx.hash} className="hover:bg-gray-50">
+                                <td className="px-4 py-3 text-sm">
+                                  <div>
+                                    <a 
+                                      href={`https://www.oklink.com/amoy/tx/${tx.hash}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-primary hover:underline font-mono text-xs truncate block max-w-[120px] sm:max-w-[200px] md:max-w-[250px]"
+                                    >
+                                      {tx.hash}
+                                    </a>
+                                    <span className="text-xs text-gray-500">{tx.timestamp.toLocaleString()}</span>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3 text-sm font-medium text-gray-900">
                                   {tx.method}
-                                </p>
-                                <p className="text-sm font-mono text-gray-600 truncate max-w-xs sm:max-w-sm md:max-w-md">
-                                  {tx.hash}
-                                </p>
-                                <div className="flex flex-col sm:flex-row sm:gap-4 text-xs text-gray-500 mt-1">
-                                  <span>{tx.timestamp.toLocaleString()}</span>
-                                  {tx.from && (
-                                    <span>From: {formatAddress(tx.from)}</span>
-                                  )}
-                                  {tx.to && (
-                                    <span>To: {formatAddress(tx.to)}</span>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="text-right">
-                                <p className="text-sm font-medium text-green-600">{tx.status}</p>
-                                <p className="text-xs text-gray-500">
-                                  Block: {tx.blockNumber}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
+                                </td>
+                                <td className="px-4 py-3 text-sm">
+                                  <div className="flex flex-col">
+                                    {tx.from && (
+                                      <span className="text-xs">From: {formatAddress(tx.from)}</span>
+                                    )}
+                                    {tx.to && (
+                                      <span className="text-xs">To: {formatAddress(tx.to)}</span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3 text-sm text-right text-gray-500">
+                                  {tx.blockNumber}
+                                </td>
+                                <td className="px-4 py-3 text-sm text-right">
+                                  <span className={`inline-flex px-2 text-xs font-semibold leading-5 rounded-full ${
+                                    tx.status === "Confirmed" 
+                                      ? "bg-green-100 text-green-800" 
+                                      : "bg-red-100 text-red-800"
+                                  }`}>
+                                    {tx.status}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
 
-                      {transactions.hasMore && (
-                        <div className="flex justify-center mt-6">
+                      <div className="mt-6 flex items-center justify-between">
+                        <div className="text-sm text-gray-500">
+                          Showing latest blockchain transactions
+                        </div>
+                        
+                        {transactions.hasMore && (
                           <Button
                             variant="outline"
                             onClick={() => {
                               if (transactions.nextBlock) {
-                                // Refetch with the next block
-                                refetch({
-                                  queryKey: ['transactions', { startBlock: transactions.nextBlock }]
-                                });
+                                // Create a new query to fetch more transactions
+                                refetch();
+                                // Update the query client with the new key
+                                // This is a workaround since we can't directly modify the query key in refetch
+                                setTimeout(() => {
+                                  window.location.hash = '#transactions';
+                                }, 100);
                               }
                             }}
                           >
                             Load More Transactions
                           </Button>
-                        </div>
-                      )}
+                        )}
+                      </div>
 
-                      <div className="flex justify-center pt-4">
+                      <div className="flex justify-center pt-4 mt-4 border-t border-gray-200">
                         <a
                           href={`https://www.oklink.com/amoy/address/${CONTRACT_ADDRESS}`}
                           target="_blank"
