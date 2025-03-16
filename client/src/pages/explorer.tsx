@@ -295,66 +295,62 @@ export default function Explorer() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-6">
-                    <div className="rounded-md border">
-                      <table className="w-full">
-                        <thead>
-                          <tr className="border-b">
-                            <th className="p-3 text-left">Transaction Hash</th>
-                            <th className="p-3 text-left">Method</th>
-                            <th className="p-3 text-left">From</th>
-                            <th className="p-3 text-left">Status</th>
-                            <th className="p-3 text-left">Time</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {transactions?.transactions?.map((tx: any) => (
-                            <tr key={tx.hash} className="border-b">
-                              <td className="p-3">
-                                <a 
-                                  href={`https://www.oklink.com/amoy/tx/${tx.hash}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-primary hover:underline"
-                                >
-                                  {tx.hash.slice(0, 10)}...{tx.hash.slice(-8)}
-                                </a>
-                              </td>
-                              <td className="p-3">{tx.method}</td>
-                              <td className="p-3">
-                                <span title={tx.from}>
-                                  {tx.from.slice(0, 6)}...{tx.from.slice(-4)}
-                                </span>
-                              </td>
-                              <td className="p-3">
-                                <span className={`px-2 py-1 rounded text-xs ${
-                                  tx.status === 'Confirmed' 
-                                    ? 'bg-green-100 text-green-800' 
-                                    : 'bg-red-100 text-red-800'
-                                }`}>
-                                  {tx.status}
-                                </span>
-                              </td>
-                              <td className="p-3">
-                                {new Date(tx.timestamp).toLocaleString()}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                    {loadingTransactions ? (
+                      <div className="flex justify-center p-8">
+                        <Spinner /> Loading transactions...
+                      </div>
+                    ) : transactions?.transactions.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        No transactions found
+                      </div>
+                    ) : (
+                      <div className="rounded-md border">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Hash</TableHead>
+                              <TableHead>Method</TableHead>
+                              <TableHead>From</TableHead>
+                              <TableHead>Status</TableHead>
+                              <TableHead>Time</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {transactions?.transactions.map((tx) => (
+                              <TableRow key={tx.hash}>
+                                <TableCell className="font-mono">
+                                  {tx.hash.substring(0, 10)}...
+                                </TableCell>
+                                <TableCell>{tx.method}</TableCell>
+                                <TableCell className="font-mono">
+                                  {tx.from.substring(0, 10)}...
+                                </TableCell>
+                                <TableCell>
+                                  <Badge variant={tx.status === "Confirmed" ? "success" : "destructive"}>
+                                    {tx.status}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell>
+                                  {new Date(tx.timestamp).toLocaleString()}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
                     
-                    <div className="flex justify-between items-center mt-4">
-                      <Button
-                        onClick={() => loadMoreTransactions()}
-                        disabled={!transactions?.hasMore || isLoading}
-                      >
-                        {isLoading ? "Loading..." : "Load More"}
-                      </Button>
-                      <p className="text-sm text-gray-500">
-                        Showing blocks {transactions?.fromBlock} to {transactions?.toBlock}
+                    <div className="text-center py-4">
+                      <p className="text-sm text-gray-600 mb-4">
+                        Showing recent contract transactions
                       </p>
-                    </div>
-                  </div>
+                      <Button
+                        variant="outline"
+                        onClick={() => refetch()}
+                        disabled={isFetching}
+                      >
+                        {isFetching ? "Refreshing..." : "Refresh Transactions"}
+                      </Button>
                       >
                         <Button variant="outline">
                           Open in new tab for better viewing
