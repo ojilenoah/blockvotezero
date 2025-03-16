@@ -104,13 +104,17 @@ export default function Explorer() {
     refetchInterval: 60000, // Only refetch every minute
   });
 
+  // State for blockchain transaction pagination
+  const [startBlock, setStartBlock] = useState<number | undefined>(undefined);
+  
   // Query for getting transaction data
   const { data: transactions, isLoading: loadingTransactions, refetch } = useQuery({
-    queryKey: ['transactions', { startBlock: 0 }], //Added startBlock for pagination
+    queryKey: ['transactions', { startBlock }], // Using the startBlock state for pagination
     queryFn: async ({ queryKey }) => {
+      console.log("Fetching transactions with startBlock:", startBlock);
       // Extract the startBlock from the query key
-      const params = queryKey[1] as { startBlock: number };
-      return await getContractTransactions(params.startBlock); //Pass startBlock to function
+      const params = queryKey[1] as { startBlock: number | undefined };
+      return await getContractTransactions(params.startBlock); // Pass startBlock to function
     },
     staleTime: 30000, // Consider data fresh for 30 seconds
     refetchInterval: 60000, // Only refetch every minute
@@ -278,13 +282,9 @@ export default function Explorer() {
                             variant="outline"
                             onClick={() => {
                               if (transactions.nextBlock) {
-                                // Create a new query to fetch more transactions
-                                refetch();
-                                // Update the query client with the new key
-                                // This is a workaround since we can't directly modify the query key in refetch
-                                setTimeout(() => {
-                                  window.location.hash = '#transactions';
-                                }, 100);
+                                // Update the startBlock state to trigger a new query with the next block
+                                console.log("Loading more transactions from block:", transactions.nextBlock);
+                                setStartBlock(transactions.nextBlock);
                               }
                             }}
                           >
