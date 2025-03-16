@@ -43,7 +43,7 @@ export function NinStatusCheck() {
   const renderStatusBadge = () => {
     if (!userDetails) return null;
 
-    if (userDetails.verification_status === 'Y') {
+    if (userDetails.status === 'Y') {
       return (
         <div className="flex items-center p-3 text-green-700 bg-green-50 rounded-md">
           <CheckCircle className="h-5 w-5 mr-2" />

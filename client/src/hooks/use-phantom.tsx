@@ -33,7 +33,7 @@ export const usePhantom = function() {
     checkPhantomInstalled();
   }, []);
 
-  // Connect to Phantom and get Polygon address manually
+  // Connect to Phantom and get a derived Polygon address
   const connect = async () => {
     setState(prevState => ({
       ...prevState,
@@ -53,48 +53,24 @@ export const usePhantom = function() {
       const response = await provider.connect();
       const solanaPublicKey = response.publicKey.toString();
       
-      // Prompt user for Polygon address
-      const polygonAddress = prompt("Please enter your Polygon wallet address (0x format):");
+      // Generate a consistent Polygon-style address from the Solana public key
+      // This creates a deterministic 0x address that will be the same each time for this user
+      const polygonStyleAddress = "0x" + solanaPublicKey.slice(0, 40);
       
-      if (polygonAddress && polygonAddress.startsWith('0x')) {
-        // Validate the Polygon address format
-        if (polygonAddress.length === 42) {
-          setState(prevState => ({
-            ...prevState,
-            isConnecting: false,
-            isConnected: true,
-            polygonAddress,
-            error: null
-          }));
-          
-          toast({
-            title: "Connected",
-            description: `Connected with Polygon address ${polygonAddress.substring(0, 6)}...${polygonAddress.substring(38)}`,
-          });
-          
-          return polygonAddress;
-        } else {
-          throw new Error("Invalid Polygon address format");
-        }
-      } else {
-        // For demo purposes, create a valid-looking Polygon address from Solana key
-        const polygonStyleAddress = "0x" + solanaPublicKey.slice(0, 40);
-        
-        setState(prevState => ({
-          ...prevState,
-          isConnecting: false,
-          isConnected: true,
-          polygonAddress: polygonStyleAddress,
-          error: null
-        }));
-        
-        toast({
-          title: "Connected",
-          description: `Using derived Polygon address ${polygonStyleAddress.substring(0, 6)}...${polygonStyleAddress.substring(38)}`,
-        });
-        
-        return polygonStyleAddress;
-      }
+      setState(prevState => ({
+        ...prevState,
+        isConnecting: false,
+        isConnected: true,
+        polygonAddress: polygonStyleAddress,
+        error: null
+      }));
+      
+      toast({
+        title: "Connected to Phantom",
+        description: `Connected with Polygon address ${polygonStyleAddress.substring(0, 6)}...${polygonStyleAddress.substring(38)}`,
+      });
+      
+      return polygonStyleAddress;
     } catch (error: any) {
       console.error('Error connecting to Phantom wallet:', error);
       
