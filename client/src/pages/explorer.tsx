@@ -19,7 +19,7 @@ import { ALCHEMY_URL, CONTRACT_ADDRESS } from "@/utils/blockchain";
 import { getActiveElectionId, getElectionInfo, getAllCandidates, getTotalVotes } from "@/utils/blockchain";
 import { useMetaMask } from "@/hooks/use-metamask";
 import { useToast } from "@/hooks/use-toast";
-import { ChevronLeft, ChevronRight, Loader2, ExternalLink } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, ExternalLink, Copy, Check } from "lucide-react";
 import { ethers } from "ethers";
 import VotingSystemABI from "../contracts/VotingSystem.json";
 
@@ -50,6 +50,7 @@ export default function Explorer() {
   const [itemsPerPage] = useState<number>(10);
   const { chainId } = useMetaMask();
   const { toast } = useToast();
+  const [copiedHash, setCopiedHash] = useState<string | null>(null);
 
   // Elections data query
   const { data: electionData, isLoading: loadingElections } = useQuery({
@@ -203,16 +204,29 @@ export default function Explorer() {
     refetchInterval: 60000,
   });
 
-  // Filter transactions based on search query
-  const filteredTransactions = transactionData?.transactions.filter(tx => {
-    if (!searchQuery) return true;
-    const query = searchQuery.toLowerCase();
-    return (
-      tx.hash.toLowerCase().includes(query) ||
-      tx.from.toLowerCase().includes(query) ||
-      tx.functionName.toLowerCase().includes(query)
-    );
-  }) || [];
+  const handleCopyHash = (hash: string) => {
+    navigator.clipboard.writeText(hash);
+    setCopiedHash(hash);
+    toast({
+      title: "Copied!",
+      description: "Transaction hash copied to clipboard",
+    });
+    setTimeout(() => setCopiedHash(null), 2000);
+  };
+
+  // Filter transactions based on search query and sort by timestamp
+  const filteredTransactions = transactionData?.transactions
+    .filter(tx => {
+      if (!searchQuery) return true;
+      const query = searchQuery.toLowerCase();
+      return (
+        tx.hash.toLowerCase().includes(query) ||
+        tx.from.toLowerCase().includes(query) ||
+        tx.functionName.toLowerCase().includes(query)
+      );
+    })
+    .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()) || [];
+
 
   // Calculate pagination
   const totalPages = Math.ceil(filteredTransactions.length / itemsPerPage);
@@ -324,8 +338,20 @@ export default function Explorer() {
                           <TableBody>
                             {currentTransactions.map((tx) => (
                               <TableRow key={tx.hash}>
-                                <TableCell className="font-mono">
-                                  {tx.hash.substring(0, 10)}...
+                                <TableCell className="font-mono flex items-center space-x-2">
+                                  <span>{tx.hash.substring(0, 10)}...</span>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 w-6 p-0"
+                                    onClick={() => handleCopyHash(tx.hash)}
+                                  >
+                                    {copiedHash === tx.hash ? (
+                                      <Check className="h-4 w-4" />
+                                    ) : (
+                                      <Copy className="h-4 w-4" />
+                                    )}
+                                  </Button>
                                 </TableCell>
                                 <TableCell>{tx.functionName}</TableCell>
                                 <TableCell className="font-mono">
@@ -399,7 +425,7 @@ export default function Explorer() {
                         >
                           {isFetching ? "Refreshing..." : "Refresh Transactions"}
                         </Button>
-                        <a 
+                        <a
                           href={`https://www.oklink.com/amoy/address/${CONTRACT_ADDRESS}`}
                           target="_blank"
                           rel="noopener noreferrer"
