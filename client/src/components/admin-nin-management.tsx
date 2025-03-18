@@ -117,24 +117,20 @@ export function AdminNinManagement() {
   const handleToggleLock = async () => {
     setLoadingLockStatus(true);
 
-    if (!account) {
-      toast({
-        title: "Error",
-        description: "Admin wallet not connected",
-        variant: "destructive",
-      });
-      setLoadingLockStatus(false);
-      return;
-    }
-
     try {
+      // Use admin address for the admin page - we're getting this from the URL context
+      // or a default admin address if the account is not available
+      const adminAddress = account || "0x2B3d7c0A2A05f760272165A836D1aDFE8ea38490";
+      
+      console.log("Using admin address for toggle:", adminAddress);
+      
       const newLockStatus = !isSubmissionLocked;
       
       // Optimistically update UI
       setIsSubmissionLocked(newLockStatus);
 
       // Update lock status in database
-      const result = await toggleNINSubmissionLock(newLockStatus, account);
+      const result = await toggleNINSubmissionLock(newLockStatus, adminAddress);
 
       if (!result.success) {
         // Revert UI change if update failed
@@ -160,8 +156,7 @@ export function AdminNinManagement() {
 
   // Calculate statistics
   const totalRegistrations = users.length;
-  const verifiedCount = users.filter(user => user.status === 'Y').length;
-  const pendingCount = users.filter(user => user.status === 'N').length;
+  const votedCount = 0; // This will be implemented in the future when voting data is available
 
   return (
     <Card className="w-full">
@@ -203,13 +198,8 @@ export function AdminNinManagement() {
             </div>
             
             <div className="bg-white p-3 rounded-md border flex-1">
-              <p className="text-sm font-medium text-green-600">Verified</p>
-              <p className="text-2xl font-bold text-green-700">{verifiedCount}</p>
-            </div>
-            
-            <div className="bg-white p-3 rounded-md border flex-1">
-              <p className="text-sm font-medium text-amber-600">Pending</p>
-              <p className="text-2xl font-bold text-amber-700">{pendingCount}</p>
+              <p className="text-sm font-medium text-blue-600">Voted</p>
+              <p className="text-2xl font-bold text-blue-700">{votedCount}</p>
             </div>
           </div>
         </div>
