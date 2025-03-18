@@ -15,217 +15,144 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import {
-  getActiveElectionId,
-  getElectionInfo,
-  getAllCandidates,
-  getTotalVotes,
-  CONTRACT_ADDRESS,
-  ALCHEMY_URL,
-  type Transaction
-} from "@/utils/blockchain";
+import { ALCHEMY_URL, CONTRACT_ADDRESS } from "@/utils/blockchain";
 import { useMetaMask } from "@/hooks/use-metamask";
 import { useToast } from "@/hooks/use-toast";
 import { ChevronLeft, ChevronRight, Loader2, ExternalLink } from "lucide-react";
 import { ethers } from "ethers";
 import VotingSystemABI from "../contracts/VotingSystem.json";
 
-interface Election {
-  id: number;
-  name: string;
-  startTime: Date;
-  endTime: Date;
-  status: "Active" | "Upcoming" | "Completed";
-  totalVotes: number;
+// ... rest of the imports remain the same ...
+
+interface Transaction {
+  hash: string;
+  timestamp: Date;
+  from: string;
+  to: string;
+  value: string;
+  asset: string;
+  status: string;
+  functionName: string;
 }
 
 export default function Explorer() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const [itemsPerPage] = useState<number>(4); // Show 4 elections per page
+  const [itemsPerPage] = useState<number>(10);
   const { chainId } = useMetaMask();
   const { toast } = useToast();
 
-  const { data: electionData, isLoading: loadingElections } = useQuery({
-    queryKey: ['elections'],
-    queryFn: async () => {
-      const currentElectionId = await getActiveElectionId();
-      const electionList: Election[] = [];
-      let totalVotesCount = 0;
-
-      const maxElectionsToFetch = 10;
-
-      for (let id = 1; id <= Math.max(currentElectionId, maxElectionsToFetch); id++) {
-        try {
-          const electionInfo = await getElectionInfo(id);
-
-          if (electionInfo && electionInfo.name) {
-            const now = new Date();
-            const startTime = electionInfo.startTime;
-            const endTime = electionInfo.endTime;
-            let status: "Active" | "Upcoming" | "Completed" = "Completed";
-
-            if (now < startTime) {
-              status = "Upcoming";
-            } else if (now >= startTime && now <= endTime) {
-              status = "Active";
-            }
-
-            const votes = await getTotalVotes(id);
-            totalVotesCount += votes;
-
-            electionList.push({
-              id,
-              name: electionInfo.name,
-              startTime,
-              endTime,
-              status,
-              totalVotes: votes
-            });
-          }
-        } catch (err) {
-          console.error(`Error fetching election ${id}:`, err);
-        }
-      }
-
-      return {
-        elections: electionList.sort((a, b) => {
-          if (a.status !== b.status) {
-            const statusOrder = { Active: 0, Upcoming: 1, Completed: 2 };
-            return statusOrder[a.status] - statusOrder[b.status];
-          }
-          return a.status === "Completed"
-            ? b.endTime.getTime() - a.endTime.getTime()
-            : a.startTime.getTime() - b.startTime.getTime();
-        }),
-        statistics: {
-          totalElections: electionList.length,
-          totalVotes: totalVotesCount,
-          activeElections: electionList.filter(e => e.status === "Active").length,
-          completedElections: electionList.filter(e => e.status === "Completed").length,
-          upcomingElections: electionList.filter(e => e.status === "Upcoming").length,
-          currentElectionId: currentElectionId
-        }
-      };
-    },
-    staleTime: 30000, // Consider data fresh for 30 seconds
-    refetchInterval: 60000, // Only refetch every minute
-  });
-
-  const [currentTxPage, setCurrentTxPage] = useState<number>(1);
-  const [txPerPage] = useState<number>(10);
-
-  const { data: transactions, isLoading: loadingTransactions, isFetching, refetch } = useQuery({
+  // Replace the transactions query with new Alchemy implementation
+  const { data: transactionData, isLoading: loadingTransactions, isFetching, refetch } = useQuery({
     queryKey: ['transactions'],
     queryFn: async () => {
-      console.log("Fetching transactions directly using election data approach");
+      try {
+        const provider = new ethers.JsonRpcProvider(ALCHEMY_URL);
+        const contract = new ethers.Contract(CONTRACT_ADDRESS, VotingSystemABI.abi, provider);
 
-      const currentElectionId = await getActiveElectionId();
-      console.log("Current election ID:", currentElectionId);
+        // Create Alchemy API URL
+        const alchemyBaseUrl = ALCHEMY_URL.split('/v2/')[0];
+        const alchemyApiKey = ALCHEMY_URL.split('/v2/')[1];
 
-      const allTransactions: Transaction[] = [];
-
-      for (let id = 1; id <= Math.max(currentElectionId, 10); id++) {
-        try {
-          const electionInfo = await getElectionInfo(id);
-
-          if (electionInfo && electionInfo.name) {
-            console.log(`Found election ${id}: ${electionInfo.name}`);
-
-            const provider = new ethers.JsonRpcProvider(ALCHEMY_URL);
-            const contract = new ethers.Contract(CONTRACT_ADDRESS, VotingSystemABI.abi, provider);
-
-            try {
-              const createFilter = contract.filters.ElectionCreated(id);
-              const createEvents = await contract.queryFilter(createFilter);
-
-              if (createEvents.length > 0) {
-                const event = createEvents[0]; 
-                const tx = await provider.getTransaction(event.transactionHash);
-                const receipt = await provider.getTransactionReceipt(event.transactionHash);
-                const block = await provider.getBlock(event.blockNumber);
-
-                if (tx && receipt && block) {
-                  const blockTimestamp = block.timestamp ? Number(block.timestamp) * 1000 : Date.now();
-
-                  allTransactions.push({
-                    hash: event.transactionHash,
-                    timestamp: new Date(blockTimestamp),
-                    from: tx.from || "",
-                    to: CONTRACT_ADDRESS,
-                    method: "createElection",
-                    value: tx.value.toString(),
-                    blockNumber: event.blockNumber,
-                    status: receipt.status === 1 ? "Confirmed" : "Failed"
-                  });
-                }
+        const response = await fetch(`${alchemyBaseUrl}/v2/${alchemyApiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: 1,
+            jsonrpc: "2.0",
+            method: "alchemy_getAssetTransfers",
+            params: [
+              {
+                fromBlock: "0x0",
+                toBlock: "latest",
+                toAddress: CONTRACT_ADDRESS,
+                category: ["external"],
+                withMetadata: true,
+                excludeZeroValue: false,
+                maxCount: "0x64" // Fetch last 100 transactions
               }
+            ]
+          })
+        });
 
-              const voteFilter = contract.filters.VoteCast(id);
-              const voteEvents = await contract.queryFilter(voteFilter);
-
-              for (const event of voteEvents) {
-                const tx = await provider.getTransaction(event.transactionHash);
-                const receipt = await provider.getTransactionReceipt(event.transactionHash);
-                const block = await provider.getBlock(event.blockNumber);
-
-                if (tx && receipt && block) {
-                  const blockTimestamp = block.timestamp ? Number(block.timestamp) * 1000 : Date.now();
-
-                  allTransactions.push({
-                    hash: event.transactionHash,
-                    timestamp: new Date(blockTimestamp),
-                    from: tx.from || "",
-                    to: CONTRACT_ADDRESS,
-                    method: "castVote",
-                    value: "0",
-                    blockNumber: event.blockNumber,
-                    status: receipt.status === 1 ? "Confirmed" : "Failed"
-                  });
-                }
-              }
-            } catch (error) {
-              console.error(`Error getting transactions for election ${id}:`, error);
-            }
-          }
-        } catch (err) {
-          console.error(`Error processing election ${id}:`, err);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
+
+        const result = await response.json();
+        const transfers = result.result.transfers;
+
+        // Process each transaction to include function name
+        const processedTransactions: Transaction[] = await Promise.all(
+          transfers.map(async (transfer: any) => {
+            const tx = await provider.getTransaction(transfer.hash);
+            const receipt = await provider.getTransactionReceipt(transfer.hash);
+
+            let functionName = "Unknown Function";
+            try {
+              if (tx?.data && tx.data !== "0x") {
+                const iface = new ethers.Interface(VotingSystemABI.abi);
+                const decodedInput = iface.parseTransaction({ data: tx.data, value: tx.value });
+                if (decodedInput) {
+                  functionName = decodedInput.name;
+                }
+              }
+            } catch (decodeError) {
+              // Silently continue if we can't decode the function
+            }
+
+            return {
+              hash: transfer.hash,
+              timestamp: new Date(transfer.metadata.blockTimestamp),
+              from: transfer.from,
+              to: transfer.to,
+              value: transfer.value,
+              asset: transfer.asset,
+              status: receipt?.status === 1 ? "Success" : "Failed",
+              functionName
+            };
+          })
+        );
+
+        return {
+          transactions: processedTransactions,
+          totalTransactions: processedTransactions.length
+        };
+      } catch (error) {
+        console.error('Error fetching transactions:', error);
+        throw error;
       }
-
-      allTransactions.sort((a, b) => b.blockNumber - a.blockNumber);
-
-      console.log(`Found a total of ${allTransactions.length} transactions`);
-
-      return {
-        transactions: allTransactions,
-        hasMore: false, 
-        totalTransactions: allTransactions.length
-      };
     },
-    staleTime: 30000, 
-    refetchInterval: 60000, 
+    staleTime: 30000,
+    refetchInterval: 60000,
   });
+
+  // Filter transactions based on search query
+  const filteredTransactions = transactionData?.transactions.filter(tx => {
+    if (!searchQuery) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      tx.hash.toLowerCase().includes(query) ||
+      tx.from.toLowerCase().includes(query) ||
+      tx.functionName.toLowerCase().includes(query)
+    );
+  }) || [];
+
+  // Calculate pagination
+  const totalPages = Math.ceil(filteredTransactions.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentTransactions = filteredTransactions.slice(startIndex, endIndex);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!searchQuery.trim()) return;
-
-    setIsSearching(true);
-    setTimeout(() => {
-      setIsSearching(false);
-      toast({
-        title: "Search Not Implemented",
-        description: "This search functionality would require a blockchain indexer which is not connected in this demo.",
-        variant: "destructive"
-      });
-    }, 1000);
+    setCurrentPage(1); // Reset to first page when searching
   };
 
   const getTransactionStatusBadge = (status: string) => {
     return (
-      <Badge variant={status === "Confirmed" ? "default" : "destructive"}>
+      <Badge variant={status === "Success" ? "default" : "destructive"}>
         {status}
       </Badge>
     );
@@ -270,7 +197,7 @@ export default function Explorer() {
               <form onSubmit={handleSearch} className="flex space-x-2">
                 <Input
                   type="text"
-                  placeholder="Search by transaction hash, voter ID, or election ID"
+                  placeholder="Search by transaction hash, voter address, or function name"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="flex-1"
@@ -303,7 +230,7 @@ export default function Explorer() {
                       <div className="flex justify-center p-8">
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading transactions...
                       </div>
-                    ) : transactions?.transactions.length === 0 ? (
+                    ) : currentTransactions.length === 0 ? (
                       <div className="text-center py-8 text-muted-foreground">
                         No transactions found
                       </div>
@@ -313,19 +240,19 @@ export default function Explorer() {
                           <TableHeader>
                             <TableRow>
                               <TableHead>Hash</TableHead>
-                              <TableHead>Method</TableHead>
+                              <TableHead>Function</TableHead>
                               <TableHead>From</TableHead>
                               <TableHead>Status</TableHead>
                               <TableHead>Time</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {transactions?.transactions.map((tx) => (
+                            {currentTransactions.map((tx) => (
                               <TableRow key={tx.hash}>
                                 <TableCell className="font-mono">
                                   {tx.hash.substring(0, 10)}...
                                 </TableCell>
-                                <TableCell>{tx.method}</TableCell>
+                                <TableCell>{tx.functionName}</TableCell>
                                 <TableCell className="font-mono">
                                   {tx.from.substring(0, 10)}...
                                 </TableCell>
@@ -333,7 +260,7 @@ export default function Explorer() {
                                   {getTransactionStatusBadge(tx.status)}
                                 </TableCell>
                                 <TableCell>
-                                  {new Date(tx.timestamp).toLocaleString()}
+                                  {tx.timestamp.toLocaleString()}
                                 </TableCell>
                               </TableRow>
                             ))}
@@ -342,10 +269,53 @@ export default function Explorer() {
                       </div>
                     )}
 
+                    {/* Pagination controls */}
+                    {!loadingTransactions && filteredTransactions.length > 0 && (
+                      <div className="flex items-center justify-between pt-4">
+                        <div>
+                          <p className="text-sm text-gray-700">
+                            Showing{" "}
+                            <span className="font-medium">{startIndex + 1}</span> to{" "}
+                            <span className="font-medium">
+                              {Math.min(endIndex, filteredTransactions.length)}
+                            </span>{" "}
+                            of{" "}
+                            <span className="font-medium">{filteredTransactions.length}</span>{" "}
+                            transactions
+                          </p>
+                        </div>
+                        <div className="flex space-x-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(currentPage - 1)}
+                            disabled={currentPage === 1}
+                          >
+                            <ChevronLeft className="h-4 w-4" />
+                          </Button>
+                          {Array.from({ length: totalPages }).map((_, index) => (
+                            <Button
+                              key={index}
+                              variant={currentPage === index + 1 ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => setCurrentPage(index + 1)}
+                            >
+                              {index + 1}
+                            </Button>
+                          ))}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(currentPage + 1)}
+                            disabled={currentPage === totalPages}
+                          >
+                            <ChevronRight className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="text-center py-4">
-                      <p className="text-sm text-gray-600 mb-4">
-                        Showing recent contract transactions
-                      </p>
                       <div className="flex justify-center gap-2">
                         <Button
                           variant="outline"
