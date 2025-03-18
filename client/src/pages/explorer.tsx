@@ -7,6 +7,15 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import {
   getActiveElectionId,
   getElectionInfo,
   getAllCandidates,
@@ -17,7 +26,7 @@ import {
 } from "@/utils/blockchain";
 import { useMetaMask } from "@/hooks/use-metamask";
 import { useToast } from "@/hooks/use-toast";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, ExternalLink } from "lucide-react";
 import { ethers } from "ethers";
 import VotingSystemABI from "../contracts/VotingSystem.json";
 
@@ -38,7 +47,6 @@ export default function Explorer() {
   const { chainId } = useMetaMask();
   const { toast } = useToast();
 
-  // Query for getting elections data
   const { data: electionData, isLoading: loadingElections } = useQuery({
     queryKey: ['elections'],
     queryFn: async () => {
@@ -46,7 +54,6 @@ export default function Explorer() {
       const electionList: Election[] = [];
       let totalVotesCount = 0;
 
-      // Lookup up to the first 10 possible election IDs
       const maxElectionsToFetch = 10;
 
       for (let id = 1; id <= Math.max(currentElectionId, maxElectionsToFetch); id++) {
@@ -106,49 +113,42 @@ export default function Explorer() {
     refetchInterval: 60000, // Only refetch every minute
   });
 
-  // State for transaction pagination
   const [currentTxPage, setCurrentTxPage] = useState<number>(1);
   const [txPerPage] = useState<number>(10);
-  
-  // Query for getting transaction data - using the same approach as elections
-  const { data: transactions, isLoading: loadingTransactions, isFetching } = useQuery({
+
+  const { data: transactions, isLoading: loadingTransactions, isFetching, refetch } = useQuery({
     queryKey: ['transactions'],
     queryFn: async () => {
       console.log("Fetching transactions directly using election data approach");
-      
-      // Get the current active election ID to know how many elections to check
+
       const currentElectionId = await getActiveElectionId();
       console.log("Current election ID:", currentElectionId);
-      
+
       const allTransactions: Transaction[] = [];
-      
-      // For each election, get its creation transaction and votes
+
       for (let id = 1; id <= Math.max(currentElectionId, 10); id++) {
         try {
-          // 1. Get the election info first to check if it exists
           const electionInfo = await getElectionInfo(id);
-          
+
           if (electionInfo && electionInfo.name) {
             console.log(`Found election ${id}: ${electionInfo.name}`);
-            
-            // Get the provider
+
             const provider = new ethers.JsonRpcProvider(ALCHEMY_URL);
             const contract = new ethers.Contract(CONTRACT_ADDRESS, VotingSystemABI.abi, provider);
-            
+
             try {
-              // 2. Find the creation transaction for this election
               const createFilter = contract.filters.ElectionCreated(id);
               const createEvents = await contract.queryFilter(createFilter);
-              
+
               if (createEvents.length > 0) {
-                const event = createEvents[0]; // Get the first matching event
+                const event = createEvents[0]; 
                 const tx = await provider.getTransaction(event.transactionHash);
                 const receipt = await provider.getTransactionReceipt(event.transactionHash);
                 const block = await provider.getBlock(event.blockNumber);
-                
+
                 if (tx && receipt && block) {
                   const blockTimestamp = block.timestamp ? Number(block.timestamp) * 1000 : Date.now();
-                  
+
                   allTransactions.push({
                     hash: event.transactionHash,
                     timestamp: new Date(blockTimestamp),
@@ -161,19 +161,18 @@ export default function Explorer() {
                   });
                 }
               }
-              
-              // 3. Find all vote transactions for this election
+
               const voteFilter = contract.filters.VoteCast(id);
               const voteEvents = await contract.queryFilter(voteFilter);
-              
+
               for (const event of voteEvents) {
                 const tx = await provider.getTransaction(event.transactionHash);
                 const receipt = await provider.getTransactionReceipt(event.transactionHash);
                 const block = await provider.getBlock(event.blockNumber);
-                
+
                 if (tx && receipt && block) {
                   const blockTimestamp = block.timestamp ? Number(block.timestamp) * 1000 : Date.now();
-                  
+
                   allTransactions.push({
                     hash: event.transactionHash,
                     timestamp: new Date(blockTimestamp),
@@ -194,20 +193,19 @@ export default function Explorer() {
           console.error(`Error processing election ${id}:`, err);
         }
       }
-      
-      // Sort transactions by block number (newest first)
+
       allTransactions.sort((a, b) => b.blockNumber - a.blockNumber);
-      
+
       console.log(`Found a total of ${allTransactions.length} transactions`);
-      
+
       return {
         transactions: allTransactions,
-        hasMore: false, // No need for pagination since we load all at once
+        hasMore: false, 
         totalTransactions: allTransactions.length
       };
     },
-    staleTime: 30000, // Consider data fresh for 30 seconds
-    refetchInterval: 60000, // Only refetch every minute
+    staleTime: 30000, 
+    refetchInterval: 60000, 
   });
 
   const handleSearch = (e: React.FormEvent) => {
@@ -225,7 +223,14 @@ export default function Explorer() {
     }, 1000);
   };
 
-  // Helper to get status badge based on election status
+  const getTransactionStatusBadge = (status: string) => {
+    return (
+      <Badge variant={status === "Confirmed" ? "default" : "destructive"}>
+        {status}
+      </Badge>
+    );
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "Active":
@@ -239,7 +244,6 @@ export default function Explorer() {
     }
   };
 
-  // Format address for display
   const formatAddress = (address: string) => {
     if (!address) return "";
     return `${address.substring(0, 6)}...${address.substring(address.length - 4)}`;
@@ -297,7 +301,7 @@ export default function Explorer() {
                   <div className="space-y-6">
                     {loadingTransactions ? (
                       <div className="flex justify-center p-8">
-                        <Spinner /> Loading transactions...
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading transactions...
                       </div>
                     ) : transactions?.transactions.length === 0 ? (
                       <div className="text-center py-8 text-muted-foreground">
@@ -326,9 +330,7 @@ export default function Explorer() {
                                   {tx.from.substring(0, 10)}...
                                 </TableCell>
                                 <TableCell>
-                                  <Badge variant={tx.status === "Confirmed" ? "success" : "destructive"}>
-                                    {tx.status}
-                                  </Badge>
+                                  {getTransactionStatusBadge(tx.status)}
                                 </TableCell>
                                 <TableCell>
                                   {new Date(tx.timestamp).toLocaleString()}
@@ -339,25 +341,33 @@ export default function Explorer() {
                         </Table>
                       </div>
                     )}
-                    
+
                     <div className="text-center py-4">
                       <p className="text-sm text-gray-600 mb-4">
                         Showing recent contract transactions
                       </p>
-                      <Button
-                        variant="outline"
-                        onClick={() => refetch()}
-                        disabled={isFetching}
-                      >
-                        {isFetching ? "Refreshing..." : "Refresh Transactions"}
-                      </Button>
-                      >
-                        <Button variant="outline">
-                          Open in new tab for better viewing
+                      <div className="flex justify-center gap-2">
+                        <Button
+                          variant="outline"
+                          onClick={() => refetch()}
+                          disabled={isFetching}
+                        >
+                          {isFetching ? "Refreshing..." : "Refresh Transactions"}
                         </Button>
-                      </a>
+                        <a 
+                          href={`https://www.oklink.com/amoy/address/${CONTRACT_ADDRESS}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-block"
+                        >
+                          <Button variant="outline">
+                            <ExternalLink className="h-4 w-4 mr-2" />
+                            View in Explorer
+                          </Button>
+                        </a>
+                      </div>
                     </div>
-                    
+
                     <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
                       <h3 className="text-lg font-medium text-blue-800 mb-2">About this Contract</h3>
                       <p className="text-sm text-blue-700 mb-2">
@@ -390,14 +400,13 @@ export default function Explorer() {
                   ) : (
                     <>
                       <div className="divide-y divide-gray-200">
-                        {/* Calculate pagination for elections */}
                         {(() => {
                           const totalElections = electionData.elections.length;
                           const totalPages = Math.ceil(totalElections / itemsPerPage);
                           const startIndex = (currentPage - 1) * itemsPerPage;
                           const endIndex = Math.min(startIndex + itemsPerPage, totalElections);
                           const currentElections = electionData.elections.slice(startIndex, endIndex);
-                          
+
                           return currentElections.map((election) => (
                             <div className="py-4" key={election.id}>
                               <h3 className="text-lg font-medium">{election.name}</h3>
@@ -420,29 +429,28 @@ export default function Explorer() {
                           ));
                         })()}
                       </div>
-                      
-                      {/* Pagination Controls */}
+
                       {(() => {
                         const totalElections = electionData.elections.length;
                         const totalPages = Math.ceil(totalElections / itemsPerPage);
-                        
+
                         if (totalPages <= 1) return null;
-                        
+
                         const startIndex = (currentPage - 1) * itemsPerPage;
                         const endIndex = Math.min(startIndex + itemsPerPage, totalElections);
-                        
+
                         const handleNextPage = () => {
                           if (currentPage < totalPages) {
                             setCurrentPage(currentPage + 1);
                           }
                         };
-                        
+
                         const handlePrevPage = () => {
                           if (currentPage > 1) {
                             setCurrentPage(currentPage - 1);
                           }
                         };
-                        
+
                         return (
                           <div className="flex items-center justify-between pt-4 mt-4 border-t border-gray-200">
                             <div className="flex-1 flex justify-between sm:hidden">
@@ -483,7 +491,7 @@ export default function Explorer() {
                                     <span className="sr-only">Previous</span>
                                     <ChevronLeft className="h-4 w-4" />
                                   </Button>
-                                  
+
                                   {Array.from({ length: totalPages }).map((_, index) => (
                                     <Button
                                       key={index}
@@ -495,7 +503,7 @@ export default function Explorer() {
                                       {index + 1}
                                     </Button>
                                   ))}
-                                  
+
                                   <Button
                                     variant="outline"
                                     size="sm"

@@ -1,15 +1,15 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tsconfigPaths from 'vite-tsconfig-paths'
-import { replit } from '@replit/vite-plugin-cartographer'
-import { shadcnThemeJson } from '@replit/vite-plugin-shadcn-theme-json'
-import { runtimeErrorModal } from '@replit/vite-plugin-runtime-error-modal'
+import { cartographer } from '@replit/vite-plugin-cartographer'
+import shadcnThemeJson from '@replit/vite-plugin-shadcn-theme-json'
+import runtimeErrorModal from '@replit/vite-plugin-runtime-error-modal'
 
 export default defineConfig({
   plugins: [
     react(),
     tsconfigPaths(),
-    replit(),
+    cartographer(),
     shadcnThemeJson(),
     runtimeErrorModal()
   ],
