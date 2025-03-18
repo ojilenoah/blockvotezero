@@ -16,13 +16,12 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { ALCHEMY_URL, CONTRACT_ADDRESS } from "@/utils/blockchain";
+import { getActiveElectionId, getElectionInfo, getAllCandidates, getTotalVotes } from "@/utils/blockchain";
 import { useMetaMask } from "@/hooks/use-metamask";
 import { useToast } from "@/hooks/use-toast";
 import { ChevronLeft, ChevronRight, Loader2, ExternalLink } from "lucide-react";
 import { ethers } from "ethers";
 import VotingSystemABI from "../contracts/VotingSystem.json";
-
-// ... rest of the imports remain the same ...
 
 interface Transaction {
   hash: string;
@@ -35,6 +34,15 @@ interface Transaction {
   functionName: string;
 }
 
+interface Election {
+  id: number;
+  name: string;
+  startTime: Date;
+  endTime: Date;
+  status: "Active" | "Upcoming" | "Completed";
+  totalVotes: number;
+}
+
 export default function Explorer() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
@@ -43,7 +51,74 @@ export default function Explorer() {
   const { chainId } = useMetaMask();
   const { toast } = useToast();
 
-  // Replace the transactions query with new Alchemy implementation
+  // Elections data query
+  const { data: electionData, isLoading: loadingElections } = useQuery({
+    queryKey: ['elections'],
+    queryFn: async () => {
+      const currentElectionId = await getActiveElectionId();
+      const electionList: Election[] = [];
+      let totalVotesCount = 0;
+
+      const maxElectionsToFetch = 10;
+
+      for (let id = 1; id <= Math.max(currentElectionId, maxElectionsToFetch); id++) {
+        try {
+          const electionInfo = await getElectionInfo(id);
+
+          if (electionInfo && electionInfo.name) {
+            const now = new Date();
+            const startTime = electionInfo.startTime;
+            const endTime = electionInfo.endTime;
+            let status: "Active" | "Upcoming" | "Completed" = "Completed";
+
+            if (now < startTime) {
+              status = "Upcoming";
+            } else if (now >= startTime && now <= endTime) {
+              status = "Active";
+            }
+
+            const votes = await getTotalVotes(id);
+            totalVotesCount += votes;
+
+            electionList.push({
+              id,
+              name: electionInfo.name,
+              startTime,
+              endTime,
+              status,
+              totalVotes: votes
+            });
+          }
+        } catch (err) {
+          console.error(`Error fetching election ${id}:`, err);
+        }
+      }
+
+      return {
+        elections: electionList.sort((a, b) => {
+          if (a.status !== b.status) {
+            const statusOrder = { Active: 0, Upcoming: 1, Completed: 2 };
+            return statusOrder[a.status] - statusOrder[b.status];
+          }
+          return a.status === "Completed"
+            ? b.endTime.getTime() - a.endTime.getTime()
+            : a.startTime.getTime() - b.startTime.getTime();
+        }),
+        statistics: {
+          totalElections: electionList.length,
+          totalVotes: totalVotesCount,
+          activeElections: electionList.filter(e => e.status === "Active").length,
+          completedElections: electionList.filter(e => e.status === "Completed").length,
+          upcomingElections: electionList.filter(e => e.status === "Upcoming").length,
+          currentElectionId: currentElectionId
+        }
+      };
+    },
+    staleTime: 30000,
+    refetchInterval: 60000,
+  });
+
+  // Transactions data query using Alchemy API
   const { data: transactionData, isLoading: loadingTransactions, isFetching, refetch } = useQuery({
     queryKey: ['transactions'],
     queryFn: async () => {
@@ -368,129 +443,25 @@ export default function Explorer() {
                       <p className="text-gray-500">No elections found on the blockchain</p>
                     </div>
                   ) : (
-                    <>
-                      <div className="divide-y divide-gray-200">
-                        {(() => {
-                          const totalElections = electionData.elections.length;
-                          const totalPages = Math.ceil(totalElections / itemsPerPage);
-                          const startIndex = (currentPage - 1) * itemsPerPage;
-                          const endIndex = Math.min(startIndex + itemsPerPage, totalElections);
-                          const currentElections = electionData.elections.slice(startIndex, endIndex);
-
-                          return currentElections.map((election) => (
-                            <div className="py-4" key={election.id}>
-                              <h3 className="text-lg font-medium">{election.name}</h3>
-                              <p className="text-sm text-gray-500">
-                                {election.startTime.toLocaleDateString()} - {election.endTime.toLocaleDateString()}
-                              </p>
-                              <div className="mt-2 flex flex-wrap gap-2">
-                                {getStatusBadge(election.status)}
-                                <div className="text-xs bg-gray-100 text-gray-800 px-2 py-1 rounded">
-                                  {election.totalVotes} votes
-                                </div>
-                                <div className="text-xs bg-gray-100 text-gray-800 px-2 py-1 rounded">
-                                  Election ID: {election.id}
-                                </div>
-                                <div className="text-xs bg-gray-100 text-gray-800 px-2 py-1 rounded">
-                                  Contract: {formatAddress(CONTRACT_ADDRESS)}
-                                </div>
-                              </div>
+                    <div className="divide-y divide-gray-200">
+                      {electionData.elections.map((election) => (
+                        <div className="py-4" key={election.id}>
+                          <h3 className="text-lg font-medium">{election.name}</h3>
+                          <p className="text-sm text-gray-500">
+                            {election.startTime.toLocaleDateString()} - {election.endTime.toLocaleDateString()}
+                          </p>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {getStatusBadge(election.status)}
+                            <div className="text-xs bg-gray-100 text-gray-800 px-2 py-1 rounded">
+                              {election.totalVotes} votes
                             </div>
-                          ));
-                        })()}
-                      </div>
-
-                      {(() => {
-                        const totalElections = electionData.elections.length;
-                        const totalPages = Math.ceil(totalElections / itemsPerPage);
-
-                        if (totalPages <= 1) return null;
-
-                        const startIndex = (currentPage - 1) * itemsPerPage;
-                        const endIndex = Math.min(startIndex + itemsPerPage, totalElections);
-
-                        const handleNextPage = () => {
-                          if (currentPage < totalPages) {
-                            setCurrentPage(currentPage + 1);
-                          }
-                        };
-
-                        const handlePrevPage = () => {
-                          if (currentPage > 1) {
-                            setCurrentPage(currentPage - 1);
-                          }
-                        };
-
-                        return (
-                          <div className="flex items-center justify-between pt-4 mt-4 border-t border-gray-200">
-                            <div className="flex-1 flex justify-between sm:hidden">
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                onClick={handlePrevPage} 
-                                disabled={currentPage === 1}
-                              >
-                                Previous
-                              </Button>
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                onClick={handleNextPage} 
-                                disabled={currentPage === totalPages}
-                              >
-                                Next
-                              </Button>
-                            </div>
-                            <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-                              <div>
-                                <p className="text-sm text-gray-700">
-                                  Showing <span className="font-medium">{startIndex + 1}</span> to{" "}
-                                  <span className="font-medium">{endIndex}</span> of{" "}
-                                  <span className="font-medium">{totalElections}</span> elections
-                                </p>
-                              </div>
-                              <div>
-                                <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="relative inline-flex items-center px-2 py-2 rounded-l-md border text-sm font-medium"
-                                    onClick={handlePrevPage}
-                                    disabled={currentPage === 1}
-                                  >
-                                    <span className="sr-only">Previous</span>
-                                    <ChevronLeft className="h-4 w-4" />
-                                  </Button>
-
-                                  {Array.from({ length: totalPages }).map((_, index) => (
-                                    <Button
-                                      key={index}
-                                      variant={currentPage === index + 1 ? "default" : "outline"}
-                                      size="sm"
-                                      className="relative inline-flex items-center px-4 py-2 text-sm font-medium"
-                                      onClick={() => setCurrentPage(index + 1)}
-                                    >
-                                      {index + 1}
-                                    </Button>
-                                  ))}
-
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="relative inline-flex items-center px-2 py-2 rounded-r-md border text-sm font-medium"
-                                    onClick={handleNextPage}
-                                    disabled={currentPage === totalPages}
-                                  >
-                                    <span className="sr-only">Next</span>
-                                    <ChevronRight className="h-4 w-4" />
-                                  </Button>
-                                </nav>
-                              </div>
+                            <div className="text-xs bg-gray-100 text-gray-800 px-2 py-1 rounded">
+                              Election ID: {election.id}
                             </div>
                           </div>
-                        );
-                      })()}
-                    </>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </CardContent>
               </Card>
@@ -527,10 +498,6 @@ export default function Explorer() {
                       <div className="bg-white p-4 rounded-lg border border-gray-200">
                         <p className="text-sm font-medium text-gray-500">Upcoming Elections</p>
                         <p className="text-3xl font-bold mt-1">{electionData?.statistics.upcomingElections}</p>
-                      </div>
-                      <div className="bg-white p-4 rounded-lg border border-gray-200">
-                        <p className="text-sm font-medium text-gray-500">Current Election ID</p>
-                        <p className="text-3xl font-bold mt-1">{electionData?.statistics.currentElectionId}</p>
                       </div>
                     </div>
                   )}
