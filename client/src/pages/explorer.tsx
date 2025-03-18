@@ -22,6 +22,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ChevronLeft, ChevronRight, Loader2, ExternalLink, Copy, Check } from "lucide-react";
 import { ethers } from "ethers";
 import VotingSystemABI from "../contracts/VotingSystem.json";
+import { LastElectionWinner } from "@/components/last-election-winner";
 
 interface Transaction {
   hash: string;
@@ -504,28 +505,44 @@ export default function Explorer() {
                       <p className="text-gray-500">Loading statistics from blockchain...</p>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-                      <div className="bg-white p-4 rounded-lg border border-gray-200">
-                        <p className="text-sm font-medium text-gray-500">Total Elections</p>
-                        <p className="text-3xl font-bold mt-1">{electionData?.statistics.totalElections}</p>
+                    <>
+                      {/* Show LastElectionWinner only when there's no active election */}
+                      {electionData?.statistics.activeElections === 0 && (
+                        <div className="mb-8">
+                          <Card>
+                            <CardHeader className="pb-3">
+                              <CardTitle>Last Election Winner</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                              <LastElectionWinner />
+                            </CardContent>
+                          </Card>
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                        <div className="bg-white p-4 rounded-lg border border-gray-200">
+                          <p className="text-sm font-medium text-gray-500">Total Elections</p>
+                          <p className="text-3xl font-bold mt-1">{electionData?.statistics.totalElections}</p>
+                        </div>
+                        <div className="bg-white p-4 rounded-lg border border-gray-200">
+                          <p className="text-sm font-medium text-gray-500">Total Votes Cast</p>
+                          <p className="text-3xl font-bold mt-1">{electionData?.statistics.totalVotes}</p>
+                        </div>
+                        <div className="bg-white p-4 rounded-lg border border-gray-200">
+                          <p className="text-sm font-medium text-gray-500">Active Elections</p>
+                          <p className="text-3xl font-bold mt-1">{electionData?.statistics.activeElections}</p>
+                        </div>
+                        <div className="bg-white p-4 rounded-lg border border-gray-200">
+                          <p className="text-sm font-medium text-gray-500">Completed Elections</p>
+                          <p className="text-3xl font-bold mt-1">{electionData?.statistics.completedElections}</p>
+                        </div>
+                        <div className="bg-white p-4 rounded-lg border border-gray-200">
+                          <p className="text-sm font-medium text-gray-500">Upcoming Elections</p>
+                          <p className="text-3xl font-bold mt-1">{electionData?.statistics.upcomingElections}</p>
+                        </div>
                       </div>
-                      <div className="bg-white p-4 rounded-lg border border-gray-200">
-                        <p className="text-sm font-medium text-gray-500">Total Votes Cast</p>
-                        <p className="text-3xl font-bold mt-1">{electionData?.statistics.totalVotes}</p>
-                      </div>
-                      <div className="bg-white p-4 rounded-lg border border-gray-200">
-                        <p className="text-sm font-medium text-gray-500">Active Elections</p>
-                        <p className="text-3xl font-bold mt-1">{electionData?.statistics.activeElections}</p>
-                      </div>
-                      <div className="bg-white p-4 rounded-lg border border-gray-200">
-                        <p className="text-sm font-medium text-gray-500">Completed Elections</p>
-                        <p className="text-3xl font-bold mt-1">{electionData?.statistics.completedElections}</p>
-                      </div>
-                      <div className="bg-white p-4 rounded-lg border border-gray-200">
-                        <p className="text-sm font-medium text-gray-500">Upcoming Elections</p>
-                        <p className="text-3xl font-bold mt-1">{electionData?.statistics.upcomingElections}</p>
-                      </div>
-                    </div>
+                    </>
                   )}
                 </CardContent>
               </Card>
