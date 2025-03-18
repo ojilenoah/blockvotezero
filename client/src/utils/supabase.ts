@@ -38,44 +38,63 @@ export const getNINByWalletAddress = async (walletAddress: string) => {
 
 export const checkNINSubmissionLocked = async () => {
   console.log('Checking NIN submission locked status');
-  const { data, error } = await supabase
-    .from('admin_config')
-    .select('locked')
-    .single();
+  try {
+    const { data, error } = await supabase
+      .from('admin_config')
+      .select('locked')
+      .single();
 
-  if (error) {
-    console.error('Error checking NIN submission status:', error);
-    
-    // Check if the error is because no records exist
-    if (error.code === 'PGRST116') {
-      console.log('No admin_config record exists, creating default record');
-      // Create a default admin config record
-      await initializeAdminConfig();
-      return false; // Default to unlocked
+    if (error) {
+      console.error('Error checking NIN submission status:', error);
+      
+      // Check if the error is because no records exist
+      if (error.code === 'PGRST116') {
+        console.log('No admin_config record exists, creating default record');
+        // Create a default admin config record
+        await initializeAdminConfig();
+        return false; // Default to unlocked
+      }
+      
+      return false; // Default to unlocked if there's another error
     }
-    
-    return false; // Default to unlocked if there's another error
-  }
 
-  console.log('NIN submission locked status:', data?.locked);
-  return data?.locked || false;
+    console.log('NIN submission locked status:', data?.locked);
+    return data?.locked === true; // Explicitly check for true
+  } catch (err) {
+    console.error('Unexpected error checking submission lock status:', err);
+    return false; // Default to unlocked on unexpected error
+  }
 };
 
 // Function to initialize admin_config with default values
 async function initializeAdminConfig() {
-  const { error } = await supabase
-    .from('admin_config')
-    .insert([
-      {
-        admin_address: "0x2B3d7c0A2A05f760272165A836D1aDFE8ea38490", // Default admin address
-        locked: false // Default to unlocked
+  try {
+    // First check if admin_config has any records
+    const { count, error: countError } = await supabase
+      .from('admin_config')
+      .select('*', { count: 'exact', head: true });
+    
+    // Only insert if there are no records
+    if (!countError && count === 0) {
+      const { error } = await supabase
+        .from('admin_config')
+        .insert([
+          {
+            admin_address: "0x2B3d7c0A2A05f760272165A836D1aDFE8ea38490", // Default admin address
+            locked: false // Default to unlocked
+          }
+        ]);
+      
+      if (error) {
+        console.error('Error initializing admin_config:', error);
+      } else {
+        console.log('Successfully initialized admin_config');
       }
-    ]);
-  
-  if (error) {
-    console.error('Error initializing admin_config:', error);
-  } else {
-    console.log('Successfully initialized admin_config');
+    } else {
+      console.log('Admin config already has records, skipping initialization');
+    }
+  } catch (err) {
+    console.error('Unexpected error initializing admin_config:', err);
   }
 }
 
@@ -125,17 +144,30 @@ export const submitNIN = async (walletAddress: string, nin: string) => {
 
 // Admin functions
 export const getAllNINs = async () => {
-  const { data, error } = await supabase
-    .from('users')
-    .select('*')
-    .order('created_at', { ascending: false });
+  try {
+    console.log('Fetching all NIN records from database');
+    
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-  if (error) {
-    console.error('Error fetching all NINs:', error);
+    if (error) {
+      console.error('Error fetching all NINs:', error);
+      return [];
+    }
+
+    if (!data || data.length === 0) {
+      console.log('No NIN records found in database');
+      return [];
+    }
+
+    console.log(`Successfully fetched ${data.length} NIN records`);
+    return data as User[];
+  } catch (err) {
+    console.error('Unexpected error fetching NIN records:', err);
     return [];
   }
-
-  return data as User[];
 };
 
 export const updateNINVerificationStatus = async (walletAddress: string, status: 'Y' | 'N') => {
@@ -153,36 +185,53 @@ export const updateNINVerificationStatus = async (walletAddress: string, status:
 };
 
 export const toggleNINSubmissionLock = async (locked: boolean, adminAddress: string) => {
-  // First check if the config exists
-  const { data: existingConfig } = await supabase
-    .from('admin_config')
-    .select('id')
-    .single();
-
-  let result;
-  
-  if (existingConfig) {
-    // Update existing config
-    result = await supabase
+  try {
+    console.log(`Toggling NIN submission lock to: ${locked}`);
+    
+    // First check if the config exists
+    const { data: existingConfig, error: fetchError } = await supabase
       .from('admin_config')
-      .update({ locked: locked })
-      .eq('id', existingConfig.id);
-  } else {
-    // Insert new config with required admin_address
-    result = await supabase
-      .from('admin_config')
-      .insert([{ 
-        locked: locked,
-        admin_address: adminAddress
-      }]);
-  }
+      .select('*')
+      .order('id', { ascending: false })
+      .limit(1)
+      .single();
 
-  if (result.error) {
-    console.error('Error toggling NIN submission lock:', result.error);
-    return { success: false, error: result.error.message };
-  }
+    if (fetchError && fetchError.code !== 'PGRST116') {
+      console.error('Error fetching admin config:', fetchError);
+      return { success: false, error: fetchError.message };
+    }
 
-  return { success: true };
+    let result;
+    
+    if (existingConfig) {
+      console.log('Updating existing admin config with ID:', existingConfig.id);
+      // Update existing config
+      result = await supabase
+        .from('admin_config')
+        .update({ locked: locked })
+        .eq('id', existingConfig.id);
+    } else {
+      console.log('Creating new admin config record');
+      // Insert new config with required admin_address
+      result = await supabase
+        .from('admin_config')
+        .insert([{ 
+          locked: locked,
+          admin_address: adminAddress
+        }]);
+    }
+
+    if (result.error) {
+      console.error('Error toggling NIN submission lock:', result.error);
+      return { success: false, error: result.error.message };
+    }
+
+    console.log('Successfully toggled NIN submission lock');
+    return { success: true };
+  } catch (err: any) {
+    console.error('Unexpected error toggling NIN submission lock:', err);
+    return { success: false, error: err.message || 'An unexpected error occurred' };
+  }
 };
 
 // Check if a wallet address is an admin
