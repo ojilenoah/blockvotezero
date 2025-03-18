@@ -13,15 +13,27 @@ import { AdminManagement } from "@/components/admin-management";
 import { AdminNinManagement } from "@/components/admin-nin-management";
 import { BlockchainTest } from "@/components/blockchain-test";
 import { getActiveElectionId, getElectionInfo, getAllCandidates, getTotalVotes } from "@/utils/blockchain";
+import { 
+  VoteIcon, 
+  CalendarIcon, 
+  UsersIcon, 
+  BarChartIcon, 
+  LayoutDashboardIcon, 
+  ShieldIcon, 
+  FileTextIcon,
+  LogOutIcon,
+  RefreshCwIcon
+} from "lucide-react";
 
 export default function AdminDashboard() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [adminAddress, setAdminAddress] = useState<string>("");
+  const [refreshing, setRefreshing] = useState(false);
 
   // Query for getting elections data
-  const { data: electionData, isLoading: loadingElections } = useQuery({
+  const { data: electionData, isLoading: loadingElections, refetch } = useQuery({
     queryKey: ['admin-elections'],
     queryFn: async () => {
       const currentElectionId = await getActiveElectionId();
@@ -118,81 +130,178 @@ export default function AdminDashboard() {
     setLocation("/admin/login");
   };
 
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await refetch();
+    setTimeout(() => setRefreshing(false), 1000);
+  };
+
   if (!isAuthenticated) {
-    return <div className="p-8 text-center">Authenticating...</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
+        <div className="bg-white p-8 rounded-xl shadow-lg border border-slate-100 flex flex-col items-center gap-4 max-w-md text-center">
+          <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+            <ShieldIcon className="h-8 w-8 text-primary" />
+          </div>
+          <div className="space-y-2">
+            <h1 className="text-2xl font-bold">Authenticating...</h1>
+            <p className="text-slate-500">Verifying your admin credentials</p>
+          </div>
+          <div className="w-16 h-16 relative mt-4">
+            <div className="absolute inset-0 rounded-full border-4 border-primary/30"></div>
+            <div className="absolute inset-0 rounded-full border-4 border-primary border-l-transparent animate-spin"></div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   const isElectionActive = electionData?.elections.some(e => e.status === "Active") ?? false;
   const hasUpcomingElection = electionData?.elections.some(e => e.status === "Upcoming") ?? false;
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 to-slate-100">
       <AdminNavbar address={adminAddress} onLogout={handleLogout} />
 
       <main className="flex-grow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="flex justify-between items-center mb-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
-              <p className="text-gray-600">Manage elections and system settings</p>
-            </div>
-            <div className="flex items-center space-x-2">
-              <div className="text-sm text-gray-500 text-right mr-2">
-                <div>Connected as:</div>
-                <div className="font-mono">{adminAddress}</div>
+              <div className="flex items-center gap-3">
+                <LayoutDashboardIcon className="h-8 w-8 text-primary" />
+                <h1 className="text-3xl font-bold text-slate-900">Admin Dashboard</h1>
               </div>
-              <Button variant="outline" onClick={handleLogout}>Logout</Button>
+              <p className="text-slate-600 mt-1">Manage elections, voters, and system settings</p>
+            </div>
+            
+            <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="flex items-center gap-2"
+                onClick={handleRefresh}
+                disabled={refreshing}
+              >
+                <RefreshCwIcon className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                <span>Refresh</span>
+              </Button>
+              
+              <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-lg shadow-sm border border-slate-200">
+                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                <div>
+                  <div className="text-xs text-slate-500">Connected as Admin</div>
+                  <div className="font-mono text-xs truncate max-w-[150px] sm:max-w-[200px]">{adminAddress}</div>
+                </div>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50"
+                  onClick={handleLogout}
+                >
+                  <LogOutIcon className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <Card>
+            <Card className="border border-slate-200 shadow-sm overflow-hidden bg-white hover:shadow-md transition-shadow">
+              <div className="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
               <CardHeader className="pb-2">
-                <CardTitle>Active Elections</CardTitle>
+                <div className="flex justify-between items-start">
+                  <CardTitle className="text-blue-600">Active Elections</CardTitle>
+                  <div className="p-2 rounded-full bg-blue-50">
+                    <VoteIcon className="h-5 w-5 text-blue-500" />
+                  </div>
+                </div>
                 <CardDescription>Currently running elections</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold">{electionData?.statistics.activeElections || 0}</div>
+                <div className="text-4xl font-bold text-blue-700">
+                  {loadingElections ? (
+                    <div className="h-8 w-12 bg-slate-200 animate-pulse rounded"></div>
+                  ) : (
+                    electionData?.statistics.activeElections || 0
+                  )}
+                </div>
               </CardContent>
             </Card>
-            <Card>
+            
+            <Card className="border border-slate-200 shadow-sm overflow-hidden bg-white hover:shadow-md transition-shadow">
+              <div className="absolute top-0 left-0 w-1 h-full bg-amber-500"></div>
               <CardHeader className="pb-2">
-                <CardTitle>Upcoming Elections</CardTitle>
+                <div className="flex justify-between items-start">
+                  <CardTitle className="text-amber-600">Upcoming Elections</CardTitle>
+                  <div className="p-2 rounded-full bg-amber-50">
+                    <CalendarIcon className="h-5 w-5 text-amber-500" />
+                  </div>
+                </div>
                 <CardDescription>Scheduled for the future</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold">{electionData?.statistics.upcomingElections || 0}</div>
+                <div className="text-4xl font-bold text-amber-700">
+                  {loadingElections ? (
+                    <div className="h-8 w-12 bg-slate-200 animate-pulse rounded"></div>
+                  ) : (
+                    electionData?.statistics.upcomingElections || 0
+                  )}
+                </div>
               </CardContent>
             </Card>
-            <Card>
+            
+            <Card className="border border-slate-200 shadow-sm overflow-hidden bg-white hover:shadow-md transition-shadow">
+              <div className="absolute top-0 left-0 w-1 h-full bg-green-500"></div>
               <CardHeader className="pb-2">
-                <CardTitle>Total Votes</CardTitle>
+                <div className="flex justify-between items-start">
+                  <CardTitle className="text-green-600">Total Votes</CardTitle>
+                  <div className="p-2 rounded-full bg-green-50">
+                    <BarChartIcon className="h-5 w-5 text-green-500" />
+                  </div>
+                </div>
                 <CardDescription>Across all elections</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold">{electionData?.statistics.totalVotes || 0}</div>
+                <div className="text-4xl font-bold text-green-700">
+                  {loadingElections ? (
+                    <div className="h-8 w-12 bg-slate-200 animate-pulse rounded"></div>
+                  ) : (
+                    electionData?.statistics.totalVotes || 0
+                  )}
+                </div>
               </CardContent>
             </Card>
           </div>
 
-          <Tabs defaultValue="create">
-            <TabsList className="mb-6">
-              <TabsTrigger value="create">Create Election</TabsTrigger>
-              <TabsTrigger value="nin">NIN Verification</TabsTrigger>
-              <TabsTrigger value="manage">Manage Admin</TabsTrigger>
-              <TabsTrigger value="test">Blockchain Test</TabsTrigger>
-            </TabsList>
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-8">
+            <Tabs defaultValue="create" className="w-full">
+              <TabsList className="w-full grid grid-cols-4 mb-8 p-1 bg-slate-100 rounded-lg gap-1">
+                <TabsTrigger value="create" className="data-[state=active]:bg-white data-[state=active]:shadow-sm flex gap-2 transition-all">
+                  <FileTextIcon className="h-4 w-4" />
+                  <span>Elections</span>
+                </TabsTrigger>
+                <TabsTrigger value="nin" className="data-[state=active]:bg-white data-[state=active]:shadow-sm flex gap-2 transition-all">
+                  <UsersIcon className="h-4 w-4" />
+                  <span>Voter Management</span>
+                </TabsTrigger>
+                <TabsTrigger value="manage" className="data-[state=active]:bg-white data-[state=active]:shadow-sm flex gap-2 transition-all">
+                  <ShieldIcon className="h-4 w-4" />
+                  <span>Admin Access</span>
+                </TabsTrigger>
+                <TabsTrigger value="test" className="data-[state=active]:bg-white data-[state=active]:shadow-sm flex gap-2 transition-all">
+                  <BarChartIcon className="h-4 w-4" />
+                  <span>System Check</span>
+                </TabsTrigger>
+              </TabsList>
 
-            <TabsContent value="create">
-              <div className="space-y-6">
-                <Card>
-                  <CardHeader>
+              <TabsContent value="create" className="mt-0 space-y-6">
+                <Card className="border-0 shadow-md">
+                  <CardHeader className="bg-gradient-to-r from-primary/5 to-transparent rounded-t-lg">
                     <CardTitle>Create New Election</CardTitle>
                     <CardDescription>
                       Set up a new election to be deployed to the blockchain
                     </CardDescription>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="pt-6">
                     <AdminElectionCreator 
                       isElectionActive={isElectionActive}
                       hasUpcomingElection={hasUpcomingElection}
@@ -205,41 +314,51 @@ export default function AdminDashboard() {
                   elections={electionData?.elections || []}
                   isLoading={loadingElections}
                 />
-              </div>
-            </TabsContent>
+              </TabsContent>
 
-            <TabsContent value="manage">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Admin Management</CardTitle>
-                  <CardDescription>
-                    Update admin wallet address with MetaMask signature verification
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <AdminManagement currentAddress={adminAddress} />
-                </CardContent>
-              </Card>
-            </TabsContent>
+              <TabsContent value="nin" className="mt-0">
+                <AdminNinManagement />
+              </TabsContent>
 
-            <TabsContent value="nin">
-              <AdminNinManagement />
-            </TabsContent>
+              <TabsContent value="manage" className="mt-0">
+                <Card className="border-0 shadow-md">
+                  <CardHeader className="bg-gradient-to-r from-primary/5 to-transparent rounded-t-lg">
+                    <CardTitle>Admin Management</CardTitle>
+                    <CardDescription>
+                      Update admin wallet address with MetaMask signature verification
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-6">
+                    <AdminManagement currentAddress={adminAddress} />
+                  </CardContent>
+                </Card>
+              </TabsContent>
 
-            <TabsContent value="test">
-              <BlockchainTest />
-            </TabsContent>
-          </Tabs>
+              <TabsContent value="test" className="mt-0">
+                <Card className="border-0 shadow-md">
+                  <CardHeader className="bg-gradient-to-r from-primary/5 to-transparent rounded-t-lg">
+                    <CardTitle>Blockchain Test</CardTitle>
+                    <CardDescription>
+                      Test and verify your connection to the blockchain
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-6">
+                    <BlockchainTest />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
+          </div>
         </div>
       </main>
 
-      <footer className="border-t border-gray-200 mt-auto">
+      <footer className="border-t border-slate-200 mt-auto bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex flex-col items-center justify-between md:flex-row">
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-slate-500">
               &copy; {new Date().getFullYear()} BlockVote Admin Panel
             </p>
-            <p className="text-sm text-gray-500 mt-2 md:mt-0">
+            <p className="text-sm text-slate-500 mt-2 md:mt-0">
               Secure Blockchain-Based Voting System
             </p>
           </div>
