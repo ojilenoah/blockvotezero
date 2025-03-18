@@ -62,9 +62,8 @@ export function AdminNinManagement() {
 
   const handleToggleVerification = async (walletAddress: string, currentStatus: 'Y' | 'N') => {
     const newStatus = currentStatus === 'Y' ? 'N' : 'Y';
-    
+
     try {
-      // Update user in the local state to show immediate feedback
       setUsers(prevUsers => 
         prevUsers.map(user => 
           user.wallet_address === walletAddress 
@@ -72,12 +71,10 @@ export function AdminNinManagement() {
             : user
         )
       );
-      
-      // Call the API to update the status
+
       const result = await updateNINVerificationStatus(walletAddress, newStatus);
-      
+
       if (!result.success) {
-        // If the API call fails, revert the local state
         setUsers(prevUsers => 
           prevUsers.map(user => 
             user.wallet_address === walletAddress 
@@ -85,10 +82,10 @@ export function AdminNinManagement() {
               : user
           )
         );
-        
+
         throw new Error(result.error || "Failed to update verification status");
       }
-      
+
       toast({
         title: "Success",
         description: `User verification status updated to ${newStatus === 'Y' ? 'Verified' : 'Not Verified'}`,
@@ -104,7 +101,7 @@ export function AdminNinManagement() {
 
   const handleToggleLock = async () => {
     setLoadingLockStatus(true);
-    
+
     if (!account) {
       toast({
         title: "Error",
@@ -114,22 +111,18 @@ export function AdminNinManagement() {
       setLoadingLockStatus(false);
       return;
     }
-    
+
     try {
       const newLockStatus = !isSubmissionLocked;
-      
-      // Optimistically update UI
       setIsSubmissionLocked(newLockStatus);
-      
-      // Call the API to update the lock status with admin address
+
       const result = await toggleNINSubmissionLock(newLockStatus, account);
-      
+
       if (!result.success) {
-        // If the API call fails, revert the local state
         setIsSubmissionLocked(!newLockStatus);
         throw new Error(result.error || "Failed to toggle submission lock");
       }
-      
+
       toast({
         title: "Success",
         description: `NIN submissions are now ${newLockStatus ? 'locked' : 'unlocked'}`,
@@ -145,39 +138,64 @@ export function AdminNinManagement() {
     }
   };
 
+  // Calculate statistics
+  const totalRegistrations = users.length;
+  const verifiedCount = users.filter(user => user.status === 'Y').length;
+  const pendingCount = users.filter(user => user.status === 'N').length;
+
   return (
     <Card className="w-full">
-      <CardHeader>
+      <CardHeader className="space-y-4">
         <CardTitle>NIN Verification Management</CardTitle>
         <CardDescription>
           Manage and verify National Identification Numbers submitted by users.
         </CardDescription>
-        <div className="flex items-center space-x-2 mt-4">
-          <span className="text-sm font-medium">NIN Submissions: </span>
+
+        {/* Registration Statistics */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4">
+          <div className="bg-slate-50 p-4 rounded-lg">
+            <p className="text-sm font-medium text-slate-600">Total Registrations</p>
+            <p className="text-2xl font-bold">{totalRegistrations}</p>
+          </div>
+          <div className="bg-green-50 p-4 rounded-lg">
+            <p className="text-sm font-medium text-green-600">Verified Users</p>
+            <p className="text-2xl font-bold">{verifiedCount}</p>
+          </div>
+          <div className="bg-yellow-50 p-4 rounded-lg">
+            <p className="text-sm font-medium text-yellow-600">Pending Verification</p>
+            <p className="text-2xl font-bold">{pendingCount}</p>
+          </div>
+        </div>
+
+        {/* Lock Controls */}
+        <div className="flex items-center justify-between p-4 bg-white border rounded-lg mt-4">
+          <div>
+            <h3 className="font-medium">Registration Control</h3>
+            <p className="text-sm text-gray-500">Control whether users can submit new NIN registrations</p>
+          </div>
           {loadingLockStatus ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
-            <>
+            <div className="flex items-center gap-4">
+              {isSubmissionLocked ? (
+                <Badge variant="destructive" className="flex items-center gap-1">
+                  <Lock className="h-3 w-3" /> Locked
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 flex items-center gap-1">
+                  <Unlock className="h-3 w-3" /> Open
+                </Badge>
+              )}
               <Switch 
                 checked={!isSubmissionLocked} 
                 onCheckedChange={() => handleToggleLock()} 
-                disabled={loadingLockStatus} 
+                disabled={loadingLockStatus}
               />
-              <span className="text-sm">
-                {isSubmissionLocked ? (
-                  <Badge variant="destructive" className="flex items-center gap-1">
-                    <Lock className="h-3 w-3" /> Locked
-                  </Badge>
-                ) : (
-                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 flex items-center gap-1">
-                    <Unlock className="h-3 w-3" /> Unlocked
-                  </Badge>
-                )}
-              </span>
-            </>
+            </div>
           )}
         </div>
       </CardHeader>
+
       <CardContent>
         {loading ? (
           <div className="flex justify-center p-8">
@@ -249,7 +267,7 @@ export function AdminNinManagement() {
             </Table>
           </div>
         )}
-        
+
         <div className="mt-4 flex justify-end">
           <Button 
             variant="outline" 
