@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
-import { Loader2, Wallet, CheckCircle } from "lucide-react";
+import { Loader2, Wallet, CheckCircle, AlertTriangle, Lock } from "lucide-react";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { useMetaMask } from "@/hooks/use-metamask";
-import { submitNIN, getNINByWalletAddress, User } from "@/utils/supabase";
+import { submitNIN, getNINByWalletAddress, User, checkNINSubmissionLocked } from "@/utils/supabase";
 
 // Validation schema for NIN
 const ninSchema = z.object({
@@ -36,6 +36,8 @@ export function NinRegistrationForm({ onSuccess }: NinRegistrationFormProps) {
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
   const [existingNIN, setExistingNIN] = useState<User | null>(null);
+  const [isRegistrationLocked, setIsRegistrationLocked] = useState(false);
+  const [checkingLockStatus, setCheckingLockStatus] = useState(true);
 
   const form = useForm<NinFormValues>({
     resolver: zodResolver(ninSchema),
@@ -43,6 +45,24 @@ export function NinRegistrationForm({ onSuccess }: NinRegistrationFormProps) {
       nin: "",
     },
   });
+
+  // Check registration lock status on component mount
+  useEffect(() => {
+    const checkLockStatus = async () => {
+      setCheckingLockStatus(true);
+      try {
+        const isLocked = await checkNINSubmissionLocked();
+        setIsRegistrationLocked(isLocked);
+        console.log("Registration lock status:", isLocked);
+      } catch (err) {
+        console.error("Error checking lock status:", err);
+      } finally {
+        setCheckingLockStatus(false);
+      }
+    };
+    
+    checkLockStatus();
+  }, []);
 
   // Check if the wallet already has a registered NIN whenever the wallet address changes
   useEffect(() => {

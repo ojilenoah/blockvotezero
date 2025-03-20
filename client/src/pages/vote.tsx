@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
@@ -6,11 +6,15 @@ import { NinLoginForm } from "@/components/nin-login-form";
 import { UserInfoCard } from "@/components/user-info-card";
 import { CandidateGrid } from "@/components/candidate-grid";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { TransactionConfirmation } from "@/components/transaction-confirmation";
 import { NoActiveElection } from "@/components/no-active-election";
 import { useMetaMask } from "@/hooks/use-metamask";
 import { castVote, getActiveElectionId, getElectionInfo, getAllCandidates, hashNIN, getTotalVotes } from "@/utils/blockchain";
+import { checkNINSubmissionLocked, autoLockRegistrationsForActiveElection } from "@/utils/supabase";
+import { Lock, AlertTriangle } from "lucide-react";
 import type { Candidate } from "@/types/candidate";
 
 enum VotingStep {
@@ -28,9 +32,34 @@ export default function Vote() {
   const [transactionHash, setTransactionHash] = useState("");
   const [transactionTimestamp, setTransactionTimestamp] = useState("");
   const [voterNIN, setVoterNIN] = useState<string>("");
+  const [registrationLocked, setRegistrationLocked] = useState<boolean | null>(null);
+  const [checkingLockStatus, setCheckingLockStatus] = useState(true);
 
   // Use MetaMask hook for wallet integration
   const { isConnected, connect, account } = useMetaMask();
+  
+  // Check if registrations are locked (for voting validation)
+  useEffect(() => {
+    const checkRegistrationStatus = async () => {
+      try {
+        setCheckingLockStatus(true);
+        // Automatically lock registrations if there's an active election
+        await autoLockRegistrationsForActiveElection();
+        
+        // Then get the current lock status
+        const isLocked = await checkNINSubmissionLocked();
+        setRegistrationLocked(isLocked);
+      } catch (error) {
+        console.error("Error checking registration lock status:", error);
+        // Default to unlocked if there's an error
+        setRegistrationLocked(false);
+      } finally {
+        setCheckingLockStatus(false);
+      }
+    };
+    
+    checkRegistrationStatus();
+  }, []);
 
   // Only fetch election data after NIN verification
   const { data: electionData, isLoading: loadingElection } = useQuery({
@@ -137,6 +166,46 @@ export default function Vote() {
 
   // Render different content based on step
   const renderContent = () => {
+    // If we're still checking lock status, show a loading indicator
+    if (checkingLockStatus) {
+      return (
+        <div className="text-center py-8">
+          <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto mb-4"></div>
+          <p className="text-gray-500">Checking registration and election status...</p>
+        </div>
+      );
+    }
+    
+    // If registrations are not locked, show a warning message
+    if (registrationLocked === false) {
+      return (
+        <Card className="max-w-3xl mx-auto">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Lock className="h-5 w-5 text-amber-500" />
+              Voting Unavailable
+            </CardTitle>
+            <CardDescription>
+              The registration system is currently open. Voting is only available when registrations are locked.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Alert className="bg-amber-50 border-amber-200">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              <AlertTitle>Registration system is unlocked</AlertTitle>
+              <AlertDescription>
+                For security reasons, voting is only allowed when the administrator has locked the registration system. 
+                This ensures the integrity of the voting process.
+                <br /><br />
+                Please contact the election administrator or try again later when an active election is in progress.
+              </AlertDescription>
+            </Alert>
+          </CardContent>
+        </Card>
+      );
+    }
+    
+    // Continue with normal flow when registrations are locked
     if (hasVoted) {
       return (
         <TransactionConfirmation
@@ -182,7 +251,7 @@ export default function Vote() {
 
             <CandidateGrid
               candidates={electionData.candidates}
-              onSelectCandidate={handleSelectCandidate}
+              onSelectCandidate={(candidate) => setSelectedCandidate(candidate as Candidate)}
               selectedCandidateId={selectedCandidate?.index || null}
             />
 

@@ -168,26 +168,39 @@ export function AdminNinManagement() {
         <div className="flex items-center justify-between p-4 bg-white border rounded-lg mt-4">
           <div>
             <h3 className="font-medium">Registration Control</h3>
-            <p className="text-sm text-gray-500">Control whether users can submit new NIN registrations</p>
+            <p className="text-sm text-gray-500">
+              {isSubmissionLocked 
+                ? "Registrations are locked. Users cannot register new NITs."
+                : "Registrations are open. Users can register new NITs."
+              }
+            </p>
+            <p className="text-xs mt-1 bg-yellow-50 p-2 border border-yellow-100 rounded text-yellow-800">
+              Note: When an active election is detected, registrations are <strong>automatically locked</strong> to ensure voting integrity.
+            </p>
           </div>
           {loadingLockStatus ? (
             <Loader2 className="h-6 w-6 animate-spin" />
           ) : (
-            <div className="flex items-center gap-4">
-              {isSubmissionLocked ? (
-                <Badge variant="destructive" className="flex items-center gap-1 px-3 py-1 text-sm">
-                  <Lock className="h-4 w-4 mr-1" /> Registrations Locked
-                </Badge>
-              ) : (
-                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 flex items-center gap-1 px-3 py-1 text-sm">
-                  <Unlock className="h-4 w-4 mr-1" /> Registrations Open
-                </Badge>
-              )}
-              <Switch 
-                checked={!isSubmissionLocked} 
-                onCheckedChange={handleToggleLock} 
-                disabled={loadingLockStatus}
-              />
+            <div className="flex flex-col items-end gap-2">
+              <div className="flex items-center gap-2">
+                {isSubmissionLocked ? (
+                  <Badge variant="destructive" className="flex items-center gap-1 px-3 py-1 text-sm">
+                    <Lock className="h-4 w-4 mr-1" /> Registrations Locked
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 flex items-center gap-1 px-3 py-1 text-sm">
+                    <Unlock className="h-4 w-4 mr-1" /> Registrations Open
+                  </Badge>
+                )}
+                <Switch 
+                  checked={!isSubmissionLocked} 
+                  onCheckedChange={handleToggleLock} 
+                  disabled={loadingLockStatus}
+                />
+              </div>
+              <div className="text-xs text-gray-500 italic">
+                Toggle switch to {isSubmissionLocked ? 'unlock' : 'lock'} registrations
+              </div>
             </div>
           )}
         </div>

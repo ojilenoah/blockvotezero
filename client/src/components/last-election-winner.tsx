@@ -118,7 +118,7 @@ export function LastElectionWinner() {
     );
   }
 
-  if (!lastElection || !lastElection.winner) {
+  if (!lastElection) {
     return (
       <Card>
         <CardHeader className="pb-2">
@@ -130,6 +130,28 @@ export function LastElectionWinner() {
             No completed elections found. The results will be displayed here after an election ends.
           </CardDescription>
         </CardHeader>
+      </Card>
+    );
+  }
+  
+  // Show a card for elections with no votes
+  if (!lastElection.winner || lastElection.totalVotes === 0) {
+    return (
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-md flex items-center">
+            <Trophy className="w-5 h-5 mr-2 text-yellow-500" />
+            No Winner
+          </CardTitle>
+          <CardDescription>
+            {lastElection.name} ended on {lastElection.endDate.toLocaleDateString()}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="p-4 text-center">
+            <p className="text-muted-foreground">No votes were cast in this election.</p>
+          </div>
+        </CardContent>
       </Card>
     );
   }

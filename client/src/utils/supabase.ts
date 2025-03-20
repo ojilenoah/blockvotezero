@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { getActiveElectionId, getElectionInfo } from './blockchain'; 
 
 // Initialize the Supabase client
 const supabaseUrl = 'https://yddootrvtrojcwellery.supabase.co';
@@ -244,4 +245,79 @@ export const isAdminWallet = async (walletAddress: string) => {
   ];
   
   return ADMIN_ADDRESSES.map(addr => addr.toLowerCase()).includes(walletAddress.toLowerCase());
+};
+
+// Check if there's an active election
+export const checkForActiveElection = async (): Promise<boolean> => {
+  try {
+    console.log("[supabase] Checking for active elections");
+    // Get current election ID
+    const nextId = await getActiveElectionId();
+    
+    if (!nextId) {
+      return false;
+    }
+
+    // Look backwards from current ID to find active elections
+    for (let id = nextId - 1; id >= 1; id--) {
+      try {
+        const electionInfo = await getElectionInfo(id);
+        
+        if (electionInfo?.name) {
+          const now = new Date();
+          const startTime = new Date(electionInfo.startTime);
+          const endTime = new Date(electionInfo.endTime);
+          const isActive = now >= startTime && now <= endTime;
+          
+          // If election is active, return true
+          if (isActive && electionInfo.active) {
+            console.log(`[supabase] Found active election: ${electionInfo.name}`);
+            return true;
+          }
+        }
+      } catch (error) {
+        continue; // Continue checking other election IDs
+      }
+    }
+    
+    console.log("[supabase] No active elections found");
+    return false;
+  } catch (error) {
+    console.error("[supabase] Error checking for active elections:", error);
+    return false;
+  }
+};
+
+// Automatically lock submissions when there's an active election
+export const autoLockRegistrationsForActiveElection = async (): Promise<void> => {
+  try {
+    // Check if there's an active election
+    const hasActiveElection = await checkForActiveElection();
+    
+    if (hasActiveElection) {
+      console.log("[supabase] Active election detected, locking NIN submissions");
+      
+      // Check current lock status
+      const isCurrentlyLocked = await checkNINSubmissionLocked();
+      
+      // Only lock if not already locked
+      if (!isCurrentlyLocked) {
+        // Get first admin address from the list
+        const adminAddress = "0x2B3d7c0A2A05f760272165A836D1aDFE8ea38490";
+        
+        // Set locked to true
+        const result = await toggleNINSubmissionLock(true, adminAddress);
+        
+        if (result.success) {
+          console.log("[supabase] Successfully locked NIN submissions for active election");
+        } else {
+          console.error("[supabase] Failed to lock NIN submissions:", result.error);
+        }
+      } else {
+        console.log("[supabase] NIN submissions already locked");
+      }
+    }
+  } catch (error) {
+    console.error("[supabase] Error in autoLockRegistrationsForActiveElection:", error);
+  }
 };
