@@ -100,47 +100,55 @@ async function initializeAdminConfig() {
 }
 
 export const submitNIN = async (walletAddress: string, nin: string) => {
-  // First check if this wallet address already has a registered NIN
-  const existingUser = await getNINByWalletAddress(walletAddress);
-  
-  if (existingUser) {
-    return { success: false, error: 'This wallet address already has a registered NIN.' };
-  }
-  
-  // Check if NIN is already registered by another wallet
-  const { data: existingNIN } = await supabase
-    .from('users')
-    .select('wallet_address')
-    .eq('nin', nin)
-    .single();
+  try {
+    // First check if registrations are locked
+    const isLocked = await checkNINSubmissionLocked();
+    if (isLocked) {
+      return { 
+        success: false, 
+        error: 'NIN registration is currently locked. This usually happens during active elections.' 
+      };
+    }
+
+    // Check if this wallet address already has a registered NIN
+    const existingUser = await getNINByWalletAddress(walletAddress);
     
-  if (existingNIN) {
-    return { success: false, error: 'This NIN is already registered with another wallet address.' };
+    if (existingUser) {
+      return { success: false, error: 'This wallet address already has a registered NIN.' };
+    }
+    
+    // Check if NIN is already registered by another wallet
+    const { data: existingNIN } = await supabase
+      .from('users')
+      .select('wallet_address')
+      .eq('nin', nin)
+      .single();
+      
+    if (existingNIN) {
+      return { success: false, error: 'This NIN is already registered with another wallet address.' };
+    }
+
+    // If all checks pass, insert the new record
+    const { data, error } = await supabase
+      .from('users')
+      .insert([
+        { 
+          wallet_address: walletAddress, 
+          nin: nin,
+          status: 'N' // Default to Not Verified
+        }
+      ]);
+
+    if (error) {
+      console.error('Error submitting NIN:', error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data };
+  } catch (err: any) {
+    console.error('Error in submitNIN:', err);
+    return { success: false, error: err.message || 'An unexpected error occurred' };
   }
-
-  // Check if submissions are locked
-  const isLocked = await checkNINSubmissionLocked();
-  if (isLocked) {
-    return { success: false, error: 'NIN submissions are currently locked by the administrator.' };
-  }
-
-  // If all checks pass, insert the new record
-  const { data, error } = await supabase
-    .from('users')
-    .insert([
-      { 
-        wallet_address: walletAddress, 
-        nin: nin,
-        status: 'N' // Default to Not Verified
-      }
-    ]);
-
-  if (error) {
-    console.error('Error submitting NIN:', error);
-    return { success: false, error: error.message };
-  }
-
-  return { success: true, data };
 };
 
 // Admin functions

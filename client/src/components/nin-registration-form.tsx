@@ -135,7 +135,33 @@ export function NinRegistrationForm({ onSuccess }: NinRegistrationFormProps) {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {!isConnected ? (
+        {checkingLockStatus ? (
+          <div className="flex justify-center p-6">
+            <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+          </div>
+        ) : isRegistrationLocked ? (
+          <div className="space-y-4">
+            <Alert className="bg-red-50 border-red-200">
+              <AlertTitle className="flex items-center gap-2">
+                <Lock className="h-5 w-5 text-red-500" />
+                Registration Closed
+              </AlertTitle>
+              <AlertDescription>
+                <p className="mb-2">NIN registration is currently locked.</p>
+                <p className="text-sm text-red-700">
+                  During active elections, the registration system is locked to ensure voting integrity. 
+                  Please check back later when the election has concluded.
+                </p>
+                {existingNIN && (
+                  <div className="mt-4 p-3 bg-blue-50 rounded-md border border-blue-100">
+                    <p className="text-sm font-medium text-blue-800">Your existing registration remains valid:</p>
+                    <div className="mt-1 font-mono text-sm">{existingNIN.nin}</div>
+                  </div>
+                )}
+              </AlertDescription>
+            </Alert>
+          </div>
+        ) : !isConnected ? (
           <div className="space-y-4">
             <Alert className="mb-4 bg-yellow-50 border-yellow-200">
               <AlertTitle>Wallet Connection Required</AlertTitle>
