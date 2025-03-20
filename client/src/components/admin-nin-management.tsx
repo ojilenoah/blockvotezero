@@ -4,10 +4,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, CheckCircle, XCircle, Lock, Unlock, RefreshCw } from "lucide-react";
+import { Loader2, Lock, Unlock, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useMetaMask } from "@/hooks/use-metamask";
-import { getAllNINs, updateNINVerificationStatus, toggleNINSubmissionLock, checkNINSubmissionLocked, User } from "@/utils/supabase";
+import { getAllNINs, toggleNINSubmissionLock, checkNINSubmissionLocked, User } from "@/utils/supabase";
 
 export function AdminNinManagement() {
   const { toast } = useToast();
@@ -71,48 +71,8 @@ export function AdminNinManagement() {
     loadLockStatus();
   }, []);
 
-  const handleToggleVerification = async (walletAddress: string, currentStatus: 'Y' | 'N') => {
-    const newStatus = currentStatus === 'Y' ? 'N' : 'Y';
-
-    try {
-      // Optimistically update UI
-      setUsers(prevUsers => 
-        prevUsers.map(user => 
-          user.wallet_address === walletAddress 
-            ? { ...user, status: newStatus } 
-            : user
-        )
-      );
-
-      // Update status in database
-      const result = await updateNINVerificationStatus(walletAddress, newStatus);
-
-      if (!result.success) {
-        // Revert UI change if update failed
-        setUsers(prevUsers => 
-          prevUsers.map(user => 
-            user.wallet_address === walletAddress 
-              ? { ...user, status: currentStatus } 
-              : user
-          )
-        );
-
-        throw new Error(result.error || "Failed to update verification status");
-      }
-
-      toast({
-        title: "Success",
-        description: `User verification status updated to ${newStatus === 'Y' ? 'Verified' : 'Not Verified'}`,
-      });
-    } catch (err: any) {
-      console.error("Error toggling verification:", err);
-      toast({
-        title: "Error",
-        description: err.message || "Failed to update verification status",
-        variant: "destructive",
-      });
-    }
-  };
+  // We've removed the verification functionality as it's no longer needed
+  // The UI now simply displays registration and voting status
 
   const handleToggleLock = async () => {
     setLoadingLockStatus(true);
@@ -161,9 +121,9 @@ export function AdminNinManagement() {
   return (
     <Card className="w-full">
       <CardHeader className="space-y-4">
-        <CardTitle>NIN Verification Management</CardTitle>
+        <CardTitle>NIN Registration Management</CardTitle>
         <CardDescription>
-          Manage and verify National Identification Numbers submitted by users.
+          Manage National Identification Number registrations and control submission status.
         </CardDescription>
 
         {/* Registration Statistics - Single Card */}

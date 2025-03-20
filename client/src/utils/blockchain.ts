@@ -307,7 +307,12 @@ export const getContractTransactions = async (
   try {
     console.log("Starting getContractTransactions with startBlock:", startBlock);
     const provider = getProvider();
-    const contract = new ethers.Contract(CONTRACT_ADDRESS, VotingSystemABI, provider);
+    // Use type assertion to specify the contract ABI is a valid interface
+    const contract = new ethers.Contract(
+      CONTRACT_ADDRESS, 
+      VotingSystemABI.abi as ethers.InterfaceAbi, 
+      provider
+    );
     
     // Get latest block
     const latestBlock = await provider.getBlockNumber();
