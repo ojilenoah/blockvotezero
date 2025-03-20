@@ -258,7 +258,7 @@ export function AdminNinManagement() {
                   <TableHead>Wallet Address</TableHead>
                   <TableHead>Registration Date</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead className="text-right">Voting Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -268,35 +268,14 @@ export function AdminNinManagement() {
                     <TableCell className="font-mono truncate max-w-[120px]">{user.wallet_address}</TableCell>
                     <TableCell>{new Date(user.created_at).toLocaleDateString()}</TableCell>
                     <TableCell>
-                      {user.status === 'Y' ? (
-                        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                          Verified
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
-                          Pending
-                        </Badge>
-                      )}
+                      <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                        Registered
+                      </Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button 
-                        variant={user.status === 'Y' ? "destructive" : "default"} 
-                        size="sm"
-                        onClick={() => handleToggleVerification(user.wallet_address, user.status)}
-                        className={user.status === 'Y' ? "" : "bg-green-600 hover:bg-green-700 text-white"}
-                      >
-                        {user.status === 'Y' ? (
-                          <>
-                            <XCircle className="h-4 w-4 mr-1" />
-                            Revoke
-                          </>
-                        ) : (
-                          <>
-                            <CheckCircle className="h-4 w-4 mr-1" />
-                            Verify
-                          </>
-                        )}
-                      </Button>
+                      <Badge variant="outline" className="bg-slate-100 text-slate-700 border-slate-200">
+                        {user.status === 'Y' ? 'Voted' : 'Not Voted'}
+                      </Badge>
                     </TableCell>
                   </TableRow>
                 ))}

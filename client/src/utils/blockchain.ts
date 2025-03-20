@@ -68,6 +68,14 @@ export const createElection = async (
   }
 
   try {
+    console.log("Creating election with parameters:", {
+      name,
+      startTime: startTime.toISOString(),
+      endTime: endTime.toISOString(),
+      candidateNames,
+      candidateParties
+    });
+    
     await window.ethereum.request({ method: 'eth_requestAccounts' });
     const provider = new ethers.BrowserProvider(window.ethereum);
     const signer = await provider.getSigner();
@@ -77,7 +85,14 @@ export const createElection = async (
     const startTimeUnix = BigInt(Math.floor(startTime.getTime() / 1000));
     const endTimeUnix = BigInt(Math.floor(endTime.getTime() / 1000));
 
+    console.log("Converted timestamps:", {
+      startTimeUnix: startTimeUnix.toString(),
+      endTimeUnix: endTimeUnix.toString()
+    });
+
     try {
+      // Send the transaction
+      console.log("Sending transaction to create election...");
       const tx = await contract.createElection(
         name,
         startTimeUnix,
@@ -85,20 +100,48 @@ export const createElection = async (
         candidateNames,
         candidateParties
       );
-
+      
+      console.log("Transaction sent:", tx.hash);
+      
+      // Wait for transaction confirmation
+      console.log("Waiting for transaction confirmation...");
       const receipt = await tx.wait();
-      return { 
+      console.log("Transaction confirmed:", receipt);
+      
+      // Safely extract properties from receipt
+      const result: TransactionResult = { 
         success: true, 
-        transactionHash: receipt.hash,
-        from: receipt.from,
-        to: receipt.to,
-        blockNumber: receipt.blockNumber
+        transactionHash: receipt.hash || tx.hash,
+        from: typeof receipt.from === 'string' ? receipt.from : undefined,
+        to: typeof receipt.to === 'string' ? receipt.to : undefined,
+        blockNumber: typeof receipt.blockNumber === 'number' || 
+                    typeof receipt.blockNumber === 'bigint' ? 
+                    Number(receipt.blockNumber) : undefined
       };
+      
+      console.log("Returning successful result:", result);
+      return result;
     } catch (error: any) {
-      console.error("Contract error:", error);
+      console.error("Contract error creating election:", error);
+      
+      // Check for specific errors and provide clearer messages
+      let errorMessage = "Failed to create election";
+      
+      if (error.message) {
+        if (error.message.includes("coalesce")) {
+          errorMessage = "Transaction processing error. Please try again with a different time range.";
+        } else if (error.message.includes("user rejected")) {
+          errorMessage = "Transaction was rejected by the user.";
+        } else if (error.message.includes("insufficient funds")) {
+          errorMessage = "Insufficient funds to complete the transaction.";
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
       return { 
         success: false, 
-        error: error.message || "Failed to create election" 
+        error: errorMessage
       };
     }
   } catch (error: any) {
