@@ -48,7 +48,9 @@ export default function Explorer() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [currentPage, setCurrentPage] = useState<number>(1);
+  const [electionPage, setElectionPage] = useState<number>(1);
   const [itemsPerPage] = useState<number>(10);
+  const [electionsPerPage] = useState<number>(5); // Show 5 elections per page
   const { chainId } = useMetaMask();
   const { toast } = useToast();
   const [copiedHash, setCopiedHash] = useState<string | null>(null);
@@ -229,11 +231,17 @@ export default function Explorer() {
     .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()) || [];
 
 
-  // Calculate pagination
+  // Calculate transaction pagination
   const totalPages = Math.ceil(filteredTransactions.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const currentTransactions = filteredTransactions.slice(startIndex, endIndex);
+  
+  // Calculate election pagination
+  const totalElectionPages = electionData?.elections ? Math.ceil(electionData.elections.length / electionsPerPage) : 0;
+  const electionStartIndex = (electionPage - 1) * electionsPerPage;
+  const electionEndIndex = electionStartIndex + electionsPerPage;
+  const currentElections = electionData?.elections ? electionData.elections.slice(electionStartIndex, electionEndIndex) : [];
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
