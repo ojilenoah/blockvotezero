@@ -521,54 +521,16 @@ export default function Explorer() {
                             >
                               <ChevronLeft className="h-4 w-4" />
                             </Button>
-                            {currentElections.map((election) => (
-                              <div key={election.id} className="border-b border-gray-200 p-4">
-                                <div className="flex justify-between items-center">
-                                  <div className="flex-1">
-                                    <h3 className="text-lg font-medium">{election.name}</h3>
-                                    <p className="text-sm text-gray-500">{election.dateRange}</p>
-                                  </div>
-                                  <div className="text-xs bg-gray-100 text-gray-800 px-2 py-1 rounded">
-                                    Election ID: {election.id}
-                                  </div>
-                                </div>
-                              </div>
+                            {Array.from({ length: totalElectionPages }).map((_, index) => (
+                              <Button
+                                key={index}
+                                variant={electionPage === index + 1 ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => setElectionPage(index + 1)}
+                              >
+                                {index + 1}
+                              </Button>
                             ))}
-                            
-                            {electionData?.elections.length > electionsPerPage && (
-                              <div className="flex items-center justify-between pt-4 mt-4">
-                                <div>
-                                  <p className="text-sm text-gray-700">
-                                    Showing{" "}
-                                    <span className="font-medium">{electionStartIndex + 1}</span> to{" "}
-                                    <span className="font-medium">
-                                      {Math.min(electionEndIndex, electionData.elections.length)}
-                                    </span>{" "}
-                                    of{" "}
-                                    <span className="font-medium">{electionData.elections.length}</span>{" "}
-                                    elections
-                                  </p>
-                                </div>
-                                <div className="flex space-x-2">
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => setElectionPage(electionPage - 1)}
-                                    disabled={electionPage === 1}
-                                  >
-                                    <ChevronLeft className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => setElectionPage(electionPage + 1)}
-                                    disabled={electionPage === totalElectionPages}
-                                  >
-                                    <ChevronRight className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              </div>
-                            )}
                             <Button
                               variant="outline"
                               size="sm"
