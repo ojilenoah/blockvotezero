@@ -15,9 +15,19 @@ export function ElectionStatus() {
         if (activeElectionId > 0) {
           const electionInfo = await getElectionInfo(activeElectionId);
           
-          if (electionInfo && electionInfo.active) {
-            setStatus("Active");
-            setElectionEndTime(new Date(electionInfo.endTime));
+          if (electionInfo) {
+            // Check if current time is between start and end time
+            const now = new Date();
+            const startTime = new Date(electionInfo.startTime);
+            const endTime = new Date(electionInfo.endTime);
+            
+            if (now >= startTime && now <= endTime) {
+              setStatus("Active");
+              setElectionEndTime(endTime);
+            } else {
+              setStatus("Inactive");
+              setTimeRemaining(null);
+            }
           } else {
             setStatus("Inactive");
             setTimeRemaining(null);

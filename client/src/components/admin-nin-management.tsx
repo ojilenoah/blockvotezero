@@ -7,7 +7,7 @@ import { Switch } from "@/components/ui/switch";
 import { Loader2, Lock, Unlock, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useMetaMask } from "@/hooks/use-metamask";
-import { getAllNINs, toggleNINSubmissionLock, checkNINSubmissionLocked, User } from "@/utils/supabase";
+import { getAllNINs, toggleNINSubmissionLock, checkNINSubmissionLocked, checkForActiveElection, User } from "@/utils/supabase";
 
 export function AdminNinManagement() {
   const { toast } = useToast();
@@ -86,6 +86,14 @@ export function AdminNinManagement() {
       
       const newLockStatus = !isSubmissionLocked;
       
+      // If trying to unlock during an active election, prevent this action
+      if (!newLockStatus) { // trying to unlock
+        const hasActiveElection = await checkForActiveElection();
+        if (hasActiveElection) {
+          throw new Error("Cannot unlock registrations during an active election. Please wait until the election is completed.");
+        }
+      }
+      
       // Optimistically update UI
       setIsSubmissionLocked(newLockStatus);
 
@@ -116,7 +124,7 @@ export function AdminNinManagement() {
 
   // Calculate statistics
   const totalRegistrations = users.length;
-  const votedCount = 0; // This will be implemented in the future when voting data is available
+  const votedCount = users.filter(user => user.status === 'Y').length;
 
   return (
     <Card className="w-full">
@@ -246,7 +254,9 @@ export function AdminNinManagement() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      <Badge variant="outline" className="bg-slate-100 text-slate-700 border-slate-200">
+                      <Badge variant="outline" className={user.status === 'Y' 
+                        ? "bg-green-50 text-green-700 border-green-200" 
+                        : "bg-slate-100 text-slate-700 border-slate-200"}>
                         {user.status === 'Y' ? 'Voted' : 'Not Voted'}
                       </Badge>
                     </TableCell>
