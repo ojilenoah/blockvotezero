@@ -479,7 +479,7 @@ export default function Explorer() {
                     </div>
                   ) : (
                     <div className="divide-y divide-gray-200">
-                      {electionData.elections.map((election) => (
+                      {currentElections.map((election) => (
                         <div className="py-4" key={election.id}>
                           <h3 className="text-lg font-medium">{election.name}</h3>
                           <p className="text-sm text-gray-500">
@@ -496,6 +496,52 @@ export default function Explorer() {
                           </div>
                         </div>
                       ))}
+                      
+                      {/* Elections pagination controls */}
+                      {electionData?.elections.length > electionsPerPage && (
+                        <div className="flex items-center justify-between pt-4 mt-4">
+                          <div>
+                            <p className="text-sm text-gray-700">
+                              Showing{" "}
+                              <span className="font-medium">{electionStartIndex + 1}</span> to{" "}
+                              <span className="font-medium">
+                                {Math.min(electionEndIndex, electionData.elections.length)}
+                              </span>{" "}
+                              of{" "}
+                              <span className="font-medium">{electionData.elections.length}</span>{" "}
+                              elections
+                            </p>
+                          </div>
+                          <div className="flex space-x-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setElectionPage(electionPage - 1)}
+                              disabled={electionPage === 1}
+                            >
+                              <ChevronLeft className="h-4 w-4" />
+                            </Button>
+                            {Array.from({ length: totalElectionPages }).map((_, index) => (
+                              <Button
+                                key={index}
+                                variant={electionPage === index + 1 ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => setElectionPage(index + 1)}
+                              >
+                                {index + 1}
+                              </Button>
+                            ))}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setElectionPage(electionPage + 1)}
+                              disabled={electionPage === totalElectionPages}
+                            >
+                              <ChevronRight className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </CardContent>
