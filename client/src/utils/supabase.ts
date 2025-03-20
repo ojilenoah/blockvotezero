@@ -297,6 +297,25 @@ export const checkForActiveElection = async (): Promise<boolean> => {
 };
 
 // Automatically lock submissions when there's an active election
+export const resetAllVoterStatus = async (): Promise<void> => {
+  try {
+    console.log("[supabase] Resetting all voter status to 'N' for new election");
+    
+    const { error } = await supabase
+      .from('users')
+      .update({ status: 'N' })
+      .neq('status', 'N'); // Only update records that aren't already 'N'
+    
+    if (error) {
+      console.error("[supabase] Error resetting voter status:", error);
+    } else {
+      console.log("[supabase] Successfully reset all voter status to 'N'");
+    }
+  } catch (error) {
+    console.error("[supabase] Error in resetAllVoterStatus:", error);
+  }
+};
+
 export const autoLockRegistrationsForActiveElection = async (): Promise<void> => {
   try {
     // Check if there's an active election

@@ -119,6 +119,17 @@ export const createElection = async (
                     Number(receipt.blockNumber) : undefined
       };
       
+      // Import the resetAllVoterStatus function from supabase.ts dynamically
+      try {
+        // Reset all voter status to 'N' for the new election
+        const { resetAllVoterStatus } = await import('./supabase');
+        await resetAllVoterStatus();
+        console.log("Reset all voter status to 'N' for the new election");
+      } catch (resetError) {
+        console.error("Error resetting voter status:", resetError);
+        // Continue with the success result even if reset fails
+      }
+      
       console.log("Returning successful result:", result);
       return result;
     } catch (error: any) {
