@@ -244,7 +244,10 @@ export function AdminNinManagement() {
               </TableHeader>
               <TableBody>
                 {users.map((user) => (
-                  <TableRow key={user.wallet_address}>
+                  <TableRow 
+                    key={user.wallet_address} 
+                    className={user.status === 'Y' ? "bg-green-50" : ""}
+                  >
                     <TableCell className="font-mono">{user.nin}</TableCell>
                     <TableCell className="font-mono truncate max-w-[120px]">{user.wallet_address}</TableCell>
                     <TableCell>{new Date(user.created_at).toLocaleDateString()}</TableCell>
@@ -254,8 +257,8 @@ export function AdminNinManagement() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      <Badge variant="outline" className={user.status === 'Y' 
-                        ? "bg-green-50 text-green-700 border-green-200" 
+                      <Badge variant={user.status === 'Y' ? "success" : "outline"} className={user.status === 'Y' 
+                        ? "bg-green-100 text-green-800 border-green-300 font-medium" 
                         : "bg-slate-100 text-slate-700 border-slate-200"}>
                         {user.status === 'Y' ? 'Voted' : 'Not Voted'}
                       </Badge>

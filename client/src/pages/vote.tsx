@@ -13,7 +13,7 @@ import { TransactionConfirmation } from "@/components/transaction-confirmation";
 import { NoActiveElection } from "@/components/no-active-election";
 import { useMetaMask } from "@/hooks/use-metamask";
 import { castVote, getActiveElectionId, getElectionInfo, getAllCandidates, hashNIN, getTotalVotes } from "@/utils/blockchain";
-import { checkNINSubmissionLocked, autoLockRegistrationsForActiveElection } from "@/utils/supabase";
+import { checkNINSubmissionLocked, autoLockRegistrationsForActiveElection, updateNINVerificationStatus, getNINByWalletAddress } from "@/utils/supabase";
 import { Lock, AlertTriangle } from "lucide-react";
 import type { Candidate } from "@/types/candidate";
 
@@ -143,6 +143,29 @@ export default function Vote() {
           setTransactionTimestamp(new Date().toLocaleString());
           setHasVoted(true);
           setCurrentStep(VotingStep.TRANSACTION_CONFIRMATION);
+
+          // Update the voter status in Supabase database
+          try {
+            console.log("Updating NIN vote status in database for wallet:", account);
+            // 1. Get the user record associated with this wallet
+            const userDetails = await getNINByWalletAddress(account);
+            
+            if (userDetails) {
+              // 2. Update the user's status to 'Y' (voted)
+              const updateResult = await updateNINVerificationStatus(account, 'Y');
+              
+              if (updateResult.success) {
+                console.log("Successfully updated voter status in database");
+              } else {
+                console.error("Failed to update voter status:", updateResult.error);
+              }
+            } else {
+              console.error("Could not find user record for wallet:", account);
+            }
+          } catch (updateError) {
+            console.error("Error updating voter status:", updateError);
+            // Don't throw error here, as the vote was successful on the blockchain
+          }
 
           toast({
             title: "Vote submitted",
