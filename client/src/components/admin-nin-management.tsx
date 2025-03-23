@@ -69,6 +69,16 @@ export function AdminNinManagement() {
     // Load data on component mount
     loadNINs();
     loadLockStatus();
+    
+    // Set up auto-refresh every 10 seconds to catch vote status updates
+    const refreshInterval = setInterval(() => {
+      console.log("[AdminNinManagement] Auto-refreshing NIN data and status");
+      loadNINs();
+      loadLockStatus();
+    }, 10000); // 10 seconds refresh interval
+    
+    // Clean up interval on component unmount
+    return () => clearInterval(refreshInterval);
   }, []);
 
   // We've removed the verification functionality as it's no longer needed
@@ -257,7 +267,7 @@ export function AdminNinManagement() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      <Badge variant={user.status === 'Y' ? "success" : "outline"} className={user.status === 'Y' 
+                      <Badge variant="outline" className={user.status === 'Y' 
                         ? "bg-green-100 text-green-800 border-green-300 font-medium" 
                         : "bg-slate-100 text-slate-700 border-slate-200"}>
                         {user.status === 'Y' ? 'Voted' : 'Not Voted'}
