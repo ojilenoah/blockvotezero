@@ -383,11 +383,7 @@ export default function Vote() {
                       </svg>
                       Submitting...
                     </>
-                  ) : (
-                    <>
-                      {isConnected ? "Cast Vote" : "Connect Wallet & Cast Vote"}
-                    </>
-                  )}
+                  ) : "Cast Vote"}
                 </Button>
               </div>
             )}
