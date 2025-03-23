@@ -125,19 +125,48 @@ export default function Vote() {
     setIsSubmitting(true);
 
     try {
+      // Step 1: Make sure wallet is connected
       if (!isConnected) {
-        await connect();
+        try {
+          await connect();
+          toast({
+            title: "Wallet connected",
+            description: "Your wallet is now connected. Please confirm the transaction."
+          });
+        } catch (err: any) {
+          console.error("Wallet connection error:", err);
+          toast({
+            title: "Wallet connection failed",
+            description: err.message || "Could not connect to your wallet. Please try again.",
+            variant: "destructive"
+          });
+          setIsSubmitting(false);
+          return;
+        }
       }
 
+      // Step 2: Proceed with voting if connected
       if (isConnected && account) {
+        console.log("Preparing to vote with account:", account);
+        
+        // Hash the NIN for blockchain verification
         const voterNINHash = await hashNIN(voterNIN);
+        console.log("NIN hash created for voting");
+        
+        // Inform user about the next steps
+        toast({
+          title: "Processing vote",
+          description: "Please confirm the transaction in your wallet. This may take a moment.",
+        });
 
+        // Send the vote transaction
         const result = await castVote(
           electionData.id,
           selectedCandidate.index,
           voterNINHash
         );
 
+        // Handle successful vote
         if (result.success && result.transactionHash) {
           setTransactionHash(result.transactionHash);
           setTransactionTimestamp(new Date().toLocaleString());
@@ -147,39 +176,86 @@ export default function Vote() {
           // Update the voter status in Supabase database
           try {
             console.log("Updating NIN vote status in database for wallet:", account);
-            // 1. Get the user record associated with this wallet
-            const userDetails = await getNINByWalletAddress(account);
+            // Update user status to voted
+            const updateResult = await updateNINVerificationStatus(account, 'Y');
             
-            if (userDetails) {
-              // 2. Update the user's status to 'Y' (voted)
-              const updateResult = await updateNINVerificationStatus(account, 'Y');
-              
-              if (updateResult.success) {
-                console.log("Successfully updated voter status in database");
-              } else {
-                console.error("Failed to update voter status:", updateResult.error);
-              }
+            if (updateResult.success) {
+              console.log("Successfully updated voter status in database");
             } else {
-              console.error("Could not find user record for wallet:", account);
+              console.error("Failed to update voter status:", updateResult.error);
+              // Don't block the flow if database update fails
             }
           } catch (updateError) {
             console.error("Error updating voter status:", updateError);
-            // Don't throw error here, as the vote was successful on the blockchain
+            // Don't block the flow if database update fails
           }
 
           toast({
-            title: "Vote submitted",
-            description: "Your vote has been recorded on the blockchain"
+            title: "Vote submitted successfully",
+            description: "Your vote has been recorded on the blockchain and is now immutable."
           });
         } else {
-          throw new Error(result.error);
+          // Handle failed vote
+          console.error("Vote casting failed:", result.error);
+          
+          // Show appropriate error message based on error type
+          if (result.error?.includes("has already voted")) {
+            toast({
+              title: "Already voted",
+              description: "Our records indicate you have already voted in this election.",
+              variant: "destructive"
+            });
+          } else if (result.error?.includes("coalesce")) {
+            toast({
+              title: "Transaction Error",
+              description: "There was a problem with the blockchain transaction. Please make sure you have enough MATIC for gas fees.",
+              variant: "destructive"
+            });
+          } else if (result.error?.includes("rejected")) {
+            toast({
+              title: "Transaction Rejected",
+              description: "You rejected the transaction in your wallet.",
+              variant: "destructive"
+            });
+          } else {
+            toast({
+              title: "Error submitting vote",
+              description: result.error || "An unexpected error occurred while processing your vote.",
+              variant: "destructive"
+            });
+          }
         }
+      } else {
+        // Still not connected after connect() was called
+        toast({
+          title: "Wallet not connected",
+          description: "Please connect your wallet to vote.",
+          variant: "destructive"
+        });
       }
     } catch (error: any) {
       console.error("Vote casting error:", error);
+      
+      // Format error message for better user experience
+      let errorMessage = "There was an error processing your vote";
+      
+      if (error.message) {
+        if (error.message.includes("coalesce")) {
+          errorMessage = "Transaction error. Please check if you have enough MATIC for gas fees.";
+        } else if (error.message.includes("rejected")) {
+          errorMessage = "You rejected the transaction in your wallet.";
+        } else if (error.message.includes("network")) {
+          errorMessage = "Network error. Please check your internet connection.";
+        } else if (error.message.includes("already voted")) {
+          errorMessage = "You have already voted in this election.";
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
       toast({
         title: "Error submitting vote",
-        description: error.message || "There was an error connecting to your wallet",
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {

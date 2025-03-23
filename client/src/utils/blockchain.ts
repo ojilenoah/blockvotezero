@@ -236,11 +236,24 @@ export const castVote = async (
   }
 
   try {
+    // Check if MetaMask is connected to the right network
+    const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+    console.log("Current chainId:", chainId);
+    
+    // Polygon Amoy chainId is 0x13881 (80001 in decimal)
+    if (chainId !== '0x13881') {
+      return { 
+        success: false, 
+        error: 'Please connect to Polygon Amoy Testnet to vote.' 
+      };
+    }
+
     await window.ethereum.request({ method: 'eth_requestAccounts' });
     const provider = new ethers.BrowserProvider(window.ethereum);
     const signer = await provider.getSigner();
-    const contract = new ethers.Contract(CONTRACT_ADDRESS, VotingSystemABI.abi, signer);
-
+    const address = await signer.getAddress();
+    console.log("Voting from address:", address);
+    
     // Create a unique voter hash that combines election ID and NIN hash
     // First ensure the NIN hash is in the correct format
     const cleanNINHash = voterNINHash.startsWith('0x') ? voterNINHash.slice(2) : voterNINHash;
@@ -259,24 +272,111 @@ export const castVote = async (
       uniqueVoterHash
     });
 
-    const tx = await contract.castVote(electionId, candidateIndex, uniqueVoterHash);
-    const receipt = await tx.wait();
+    // Create contract with explicit gas settings
+    const contract = new ethers.Contract(CONTRACT_ADDRESS, VotingSystemABI.abi, signer);
+    
+    // Check if voter has already voted
+    try {
+      const hasVoted = await contract.hasVoted(electionId, uniqueVoterHash);
+      console.log("Has voter already voted:", hasVoted);
+      if (hasVoted) {
+        return {
+          success: false,
+          error: "You have already voted in this election."
+        };
+      }
+    } catch (err) {
+      console.warn("Error checking if voter has voted:", err);
+      // Continue anyway as the contract will enforce this
+    }
+    
+    // Get gas estimate for better transaction parameters
+    try {
+      // Estimate gas for the transaction
+      const gasEstimate = await contract.castVote.estimateGas(
+        electionId, 
+        candidateIndex, 
+        uniqueVoterHash
+      );
+      console.log("Gas estimate for vote:", gasEstimate.toString());
+      
+      // Add 30% buffer to gas estimate
+      const gasLimit = Math.ceil(Number(gasEstimate) * 1.3);
+      console.log("Using gas limit:", gasLimit);
+      
+      // Send the transaction with explicit gas settings
+      const tx = await contract.castVote(
+        electionId, 
+        candidateIndex, 
+        uniqueVoterHash, 
+        { gasLimit }
+      );
+      
+      console.log("Vote transaction sent:", tx.hash);
+      
+      // Update voter status in database while transaction is confirming
+      try {
+        const { updateNINVerificationStatus } = await import('./supabase');
+        await updateNINVerificationStatus(address, 'Y');
+        console.log("Updated voter status to 'Y' in database");
+      } catch (dbError) {
+        console.error("Error updating voter status:", dbError);
+        // Continue with blockchain transaction even if database update fails
+      }
+      
+      // Wait for receipt
+      console.log("Waiting for transaction confirmation...");
+      const receipt = await tx.wait();
+      console.log("Transaction confirmed:", receipt);
 
-    // After successful vote, open the transaction in OKLink explorer
-    const explorerUrl = `https://www.oklink.com/amoy/tx/${receipt.hash}`;
-    window.open(explorerUrl, '_blank');
+      // After successful vote, open the transaction in OKLink explorer
+      const explorerUrl = `https://www.oklink.com/amoy/tx/${receipt.hash}`;
+      window.open(explorerUrl, '_blank');
 
-    return {
-      success: true,
-      transactionHash: receipt.hash,
-      electionId,
-      from: receipt.from,
-      to: receipt.to,
-      blockNumber: receipt.blockNumber
-    };
+      return {
+        success: true,
+        transactionHash: receipt.hash,
+        electionId,
+        from: receipt.from,
+        to: receipt.to,
+        blockNumber: receipt.blockNumber
+      };
+    } catch (error: any) {
+      console.error("Error in gas estimation or transaction:", error);
+      
+      // Special handling for common errors
+      if (error.code === 4001) {
+        return { success: false, error: "Transaction rejected by user." };
+      } else if (error.code === -32603) {
+        return { 
+          success: false, 
+          error: "MetaMask internal error. Please make sure you have enough MATIC for gas fees and try again."
+        };
+      } else if (error.reason && error.reason.includes("has already voted")) {
+        return { success: false, error: "You have already voted in this election." };
+      }
+      
+      return { success: false, error: error.message || "Unknown error during transaction" };
+    }
   } catch (error: any) {
     console.error("Error casting vote:", error);
-    return { success: false, error: error.message };
+    
+    // Format error message for better user experience
+    let errorMessage = "Error casting vote";
+    
+    if (error.code === "ACTION_REJECTED") {
+      errorMessage = "Transaction was rejected in your wallet";
+    } else if (error.reason) {
+      errorMessage = error.reason;
+    } else if (error.message) {
+      if (error.message.includes("coalesce")) {
+        errorMessage = "Transaction error. Please check if you have enough MATIC for gas fees.";
+      } else {
+        errorMessage = error.message;
+      }
+    }
+    
+    return { success: false, error: errorMessage };
   }
 };
 
