@@ -11,51 +11,83 @@ export function ElectionStatus() {
   useEffect(() => {
     const fetchElectionData = async () => {
       try {
-        const activeElectionId = await getActiveElectionId();
+        const nextElectionId = await getActiveElectionId();
         
-        if (activeElectionId > 0) {
-          const electionInfo = await getElectionInfo(activeElectionId);
-          
-          if (electionInfo) {
-            // Check if current time is between start and end time
-            const now = new Date();
-            const startTime = new Date(electionInfo.startTime);
-            const endTime = new Date(electionInfo.endTime);
+        if (nextElectionId <= 0) {
+          setStatus("Inactive");
+          setTimeRemaining(null);
+          return;
+        }
+        
+        // Check all elections backwards from the current ID to find active ones
+        let foundActiveElection = false;
+        let foundUpcomingElection = false;
+        let activeElectionEndTime: Date | null = null;
+        let upcomingElectionStartTime: Date | null = null;
+        
+        console.log("[ElectionStatus] Checking elections up to ID:", nextElectionId);
+        
+        // Check all elections from most recent to oldest
+        for (let id = nextElectionId - 1; id >= 1; id--) {
+          try {
+            const electionInfo = await getElectionInfo(id);
             
-            console.log("[ElectionStatus] Current time:", now);
-            console.log("[ElectionStatus] Election start time:", startTime);
-            console.log("[ElectionStatus] Election end time:", endTime);
-            
-            if (now >= startTime && now <= endTime) {
-              setStatus("Active");
-              setElectionEndTime(endTime);
-              setTimeRemaining(null); // Let the countdown timer handle this
-            } else if (now < startTime) {
-              // This is an upcoming election
-              setStatus("Upcoming");
-              setElectionStartTime(startTime);
+            if (electionInfo && electionInfo.name) {
+              const now = new Date();
+              const startTime = new Date(electionInfo.startTime);
+              const endTime = new Date(electionInfo.endTime);
               
-              // Calculate time until election starts
-              const timeUntilStart = startTime.getTime() - now.getTime();
-              const days = Math.floor(timeUntilStart / (1000 * 60 * 60 * 24));
-              const hours = Math.floor((timeUntilStart % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-              const minutes = Math.floor((timeUntilStart % (1000 * 60 * 60)) / (1000 * 60));
+              console.log(`[ElectionStatus] Checking election ${id}:`, {
+                name: electionInfo.name,
+                now: now.toISOString(),
+                startTime: startTime.toISOString(),
+                endTime: endTime.toISOString(),
+                active: electionInfo.active
+              });
               
-              if (days > 0) {
-                setTimeRemaining(`Starts in ${days} day${days > 1 ? 's' : ''} ${hours} hour${hours > 1 ? 's' : ''}`);
-              } else if (hours > 0) {
-                setTimeRemaining(`Starts in ${hours} hour${hours > 1 ? 's' : ''} ${minutes} minute${minutes > 1 ? 's' : ''}`);
-              } else {
-                setTimeRemaining(`Starts in ${minutes} minute${minutes > 1 ? 's' : ''}`);
+              // Check if election is currently active
+              if (now >= startTime && now <= endTime && electionInfo.active) {
+                console.log(`[ElectionStatus] Found active election: ${electionInfo.name}`);
+                foundActiveElection = true;
+                activeElectionEndTime = endTime;
+                break; // Stop once we find an active election
+              } 
+              // If no active election found yet, check for upcoming elections
+              else if (!foundActiveElection && !foundUpcomingElection && now < startTime) {
+                console.log(`[ElectionStatus] Found upcoming election: ${electionInfo.name}`);
+                foundUpcomingElection = true;
+                upcomingElectionStartTime = startTime;
+                // Don't break here, continue checking for active elections
               }
-            } else {
-              // This election is over
-              setStatus("Inactive");
-              setTimeRemaining(null);
             }
+          } catch (error) {
+            console.error(`[ElectionStatus] Error checking election ${id}:`, error);
+            continue; // Continue checking other elections
+          }
+        }
+        
+        // Update state based on what we found
+        if (foundActiveElection && activeElectionEndTime) {
+          setStatus("Active");
+          setElectionEndTime(activeElectionEndTime);
+          setTimeRemaining(null); // Let the countdown timer handle this
+        } else if (foundUpcomingElection && upcomingElectionStartTime) {
+          setStatus("Upcoming");
+          setElectionStartTime(upcomingElectionStartTime);
+          
+          // Calculate time until election starts
+          const now = new Date();
+          const timeUntilStart = upcomingElectionStartTime.getTime() - now.getTime();
+          const days = Math.floor(timeUntilStart / (1000 * 60 * 60 * 24));
+          const hours = Math.floor((timeUntilStart % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+          const minutes = Math.floor((timeUntilStart % (1000 * 60 * 60)) / (1000 * 60));
+          
+          if (days > 0) {
+            setTimeRemaining(`Starts in ${days} day${days > 1 ? 's' : ''} ${hours} hour${hours > 1 ? 's' : ''}`);
+          } else if (hours > 0) {
+            setTimeRemaining(`Starts in ${hours} hour${hours > 1 ? 's' : ''} ${minutes} minute${minutes > 1 ? 's' : ''}`);
           } else {
-            setStatus("Inactive");
-            setTimeRemaining(null);
+            setTimeRemaining(`Starts in ${minutes} minute${minutes > 1 ? 's' : ''}`);
           }
         } else {
           setStatus("Inactive");
