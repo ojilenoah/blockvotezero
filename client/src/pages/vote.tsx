@@ -176,15 +176,19 @@ export default function Vote() {
 
         // Update the voter status in Supabase database
         try {
-          console.log("Updating NIN vote status in database for wallet:", account);
-          // Update user status to voted
-          const updateResult = await updateNINVerificationStatus(account, 'Y');
-          
-          if (updateResult.success) {
-            console.log("Successfully updated voter status in database");
+          if (account) {
+            console.log("Updating NIN vote status in database for wallet:", account);
+            // Update user status to voted
+            const updateResult = await updateNINVerificationStatus(account, 'Y');
+            
+            if (updateResult.success) {
+              console.log("Successfully updated voter status in database");
+            } else {
+              console.error("Failed to update voter status:", updateResult.error);
+              // Don't block the flow if database update fails
+            }
           } else {
-            console.error("Failed to update voter status:", updateResult.error);
-            // Don't block the flow if database update fails
+            console.error("Cannot update NIN status: account is null");
           }
         } catch (updateError) {
           console.error("Error updating voter status:", updateError);

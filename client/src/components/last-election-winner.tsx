@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getElectionInfo, getAllCandidates, getTotalVotes } from "@/utils/blockchain";
+import { getElectionInfo, getAllCandidates, getTotalVotes, getActiveElectionId } from "@/utils/blockchain";
 import { candidateColors } from "@/data/mock-data";
 import { Trophy } from "lucide-react";
 
@@ -24,8 +24,12 @@ export function LastElectionWinner() {
     const fetchLastCompletedElection = async () => {
       try {
         setLoading(true);
-        // Start from a high election ID and search backwards
-        let electionId = 20; // Assuming we won't have more than 20 elections to start
+        // Get the next election ID (current ID + 1)
+        const nextId = await getActiveElectionId();
+        console.log(`[LastElectionWinner] Next election ID: ${nextId}, starting search from previous ID: ${nextId > 0 ? nextId - 1 : 0}`);
+        
+        // Start from the most recent election ID and search backwards
+        let electionId = nextId > 0 ? nextId - 1 : 0; // Start from the most recent election
         let foundCompletedElection = false;
 
         // Check backwards from recent elections until we find a completed one
