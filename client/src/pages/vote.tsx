@@ -18,11 +18,10 @@ import {
   getElectionInfo, 
   getAllCandidates, 
   hashNIN, 
-  getTotalVotes, 
-  switchToPolygonAmoy 
+  getTotalVotes
 } from "@/utils/blockchain";
 import { checkNINSubmissionLocked, autoLockRegistrationsForActiveElection, updateNINVerificationStatus, getNINByWalletAddress } from "@/utils/supabase";
-import { Lock, AlertTriangle, ExternalLink } from "lucide-react";
+import { Lock, AlertTriangle } from "lucide-react";
 import type { Candidate } from "@/types/candidate";
 
 enum VotingStep {
@@ -362,43 +361,7 @@ export default function Vote() {
               selectedCandidateId={selectedCandidate?.index || null}
             />
 
-            {/* Network switcher alert */}
-            <Alert className="bg-blue-50 border-blue-200 mb-4">
-              <ExternalLink className="h-5 w-5 text-blue-500" />
-              <AlertTitle>Check your wallet network</AlertTitle>
-              <AlertDescription className="flex flex-col gap-3">
-                <p>Make sure your wallet is connected to Polygon Amoy Testnet to vote.</p>
-                <Button 
-                  className="bg-blue-500 hover:bg-blue-600 w-full sm:w-auto"
-                  onClick={async () => {
-                    try {
-                      const success = await switchToPolygonAmoy();
-                      if (success) {
-                        toast({
-                          title: "Network switched successfully",
-                          description: "Your wallet is now connected to Polygon Amoy Testnet."
-                        });
-                      } else {
-                        toast({
-                          title: "Network switch failed",
-                          description: "Please switch to Polygon Amoy Testnet manually in your wallet.",
-                          variant: "destructive"
-                        });
-                      }
-                    } catch (error) {
-                      console.error("Error switching network:", error);
-                      toast({
-                        title: "Network switch error",
-                        description: "Could not switch network. Please try manually in your wallet.",
-                        variant: "destructive"
-                      });
-                    }
-                  }}
-                >
-                  Switch to Polygon Amoy Testnet
-                </Button>
-              </AlertDescription>
-            </Alert>
+
             
             {selectedCandidate && (
               <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 flex flex-col sm:flex-row justify-between items-center space-y-4 sm:space-y-0">
