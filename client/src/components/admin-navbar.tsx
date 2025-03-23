@@ -1,7 +1,7 @@
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useMetaMask } from "../hooks/use-metamask";
-import { Wallet, Check, AlertCircle, Home } from "lucide-react";
+import { Wallet, Check } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 interface AdminNavbarProps {
@@ -56,11 +56,6 @@ export function AdminNavbar({ address, onLogout }: AdminNavbarProps) {
               <Link href="/admin/dashboard">
                 <Button variant="ghost" className="text-sm font-medium">
                   Dashboard
-                </Button>
-              </Link>
-              <Link href="/">
-                <Button variant="default" className="text-sm font-medium ml-2 flex items-center">
-                  <Home className="mr-2 h-4 w-4" /> BlockVote
                 </Button>
               </Link>
             </div>
