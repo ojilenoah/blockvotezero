@@ -23,14 +23,45 @@ export interface AdminConfig {
 
 // Helper functions for working with Supabase
 export const getNINByWalletAddress = async (walletAddress: string) => {
+  // Make wallet address lowercase for case-insensitive comparison
+  const normalizedWalletAddress = walletAddress.toLowerCase();
+  console.log("[supabase] Looking up NIN for wallet address:", normalizedWalletAddress);
+  
+  // First try direct lookup
   const { data, error } = await supabase
     .from('users')
     .select('*')
-    .eq('wallet_address', walletAddress)
+    .ilike('wallet_address', normalizedWalletAddress)
     .single();
 
+  if (data) {
+    console.log("[supabase] Found NIN by wallet address:", data.nin);
+    return data as User;
+  }
+  
+  // If direct lookup fails, fetch all users and compare addresses case-insensitively
   if (error) {
-    console.error('Error fetching NIN by wallet address:', error);
+    console.log("[supabase] Direct lookup failed, trying case-insensitive comparison");
+    const { data: allUsers, error: allUsersError } = await supabase
+      .from('users')
+      .select('*');
+    
+    if (allUsersError) {
+      console.error('[supabase] Error fetching all users:', allUsersError);
+      return null;
+    }
+    
+    // Find user with matching wallet address (case-insensitive)
+    const matchedUser = allUsers.find(
+      (user) => user.wallet_address.toLowerCase() === normalizedWalletAddress
+    );
+    
+    if (matchedUser) {
+      console.log("[supabase] Found NIN by case-insensitive comparison:", matchedUser.nin);
+      return matchedUser as User;
+    }
+    
+    console.error('[supabase] No user found with wallet address:', normalizedWalletAddress);
     return null;
   }
 
@@ -180,16 +211,42 @@ export const getAllNINs = async () => {
 };
 
 export const updateNINVerificationStatus = async (walletAddress: string, status: 'Y' | 'N') => {
+  // Normalize wallet address
+  const normalizedWalletAddress = walletAddress.toLowerCase();
+  console.log('[supabase] Updating NIN verification status for wallet:', normalizedWalletAddress, 'to status:', status);
+  
+  // Try updating with case-insensitive comparison
   const { data, error } = await supabase
     .from('users')
     .update({ status: status })
-    .eq('wallet_address', walletAddress);
+    .ilike('wallet_address', normalizedWalletAddress);
 
   if (error) {
     console.error('Error updating NIN verification status:', error);
+    
+    // If direct update fails, try to find the user record first
+    console.log('[supabase] Direct update failed, trying to find user first');
+    const user = await getNINByWalletAddress(walletAddress);
+    
+    if (user) {
+      console.log('[supabase] Found user with NIN:', user.nin, 'attempting update with exact address');
+      const { data: updateData, error: updateError } = await supabase
+        .from('users')
+        .update({ status: status })
+        .eq('wallet_address', user.wallet_address); // Use exact address from database
+      
+      if (updateError) {
+        console.error('Error updating with exact address:', updateError);
+        return { success: false, error: updateError.message };
+      }
+      
+      return { success: true, data: updateData };
+    }
+    
     return { success: false, error: error.message };
   }
 
+  console.log('[supabase] Successfully updated NIN verification status');
   return { success: true, data };
 };
 
