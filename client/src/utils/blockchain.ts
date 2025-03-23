@@ -225,6 +225,53 @@ export const getTotalVotes = async (electionId: number): Promise<number> => {
   }
 };
 
+// Helper function to switch to the Polygon Amoy Testnet
+export const switchToPolygonAmoy = async (): Promise<boolean> => {
+  if (!window.ethereum) return false;
+  
+  const targetChainId = '0x13881'; // Polygon Amoy Testnet (80001 in decimal)
+  
+  try {
+    // First try to switch to the network
+    await window.ethereum.request({
+      method: 'wallet_switchEthereumChain',
+      params: [{ chainId: targetChainId }],
+    });
+    
+    return true;
+  } catch (switchError: any) {
+    // This error code indicates that the chain has not been added to MetaMask
+    if (switchError.code === 4902) {
+      try {
+        await window.ethereum.request({
+          method: 'wallet_addEthereumChain',
+          params: [
+            {
+              chainId: targetChainId,
+              chainName: 'Polygon Amoy Testnet',
+              nativeCurrency: {
+                name: 'MATIC',
+                symbol: 'MATIC',
+                decimals: 18
+              },
+              rpcUrls: ['https://polygon-amoy.g.alchemy.com/v2/E822ZzOp7UFQy6Zt82uF4hzcdklL-qoe'],
+              blockExplorerUrls: ['https://www.oklink.com/amoy']
+            },
+          ],
+        });
+        
+        return true;
+      } catch (addError) {
+        console.error('Error adding Polygon Amoy network to MetaMask:', addError);
+        return false;
+      }
+    }
+    
+    console.error('Error switching to Polygon Amoy network:', switchError);
+    return false;
+  }
+};
+
 // Cast a vote
 export const castVote = async (
   electionId: number,
@@ -242,10 +289,25 @@ export const castVote = async (
     
     // Polygon Amoy chainId is 0x13881 (80001 in decimal)
     if (chainId !== '0x13881') {
-      return { 
-        success: false, 
-        error: 'Please connect to Polygon Amoy Testnet to vote.' 
-      };
+      // Try to switch to the correct network automatically
+      const switched = await switchToPolygonAmoy();
+      
+      if (!switched) {
+        // Your network is wrong - show detailed error with current network and expected network
+        return { 
+          success: false, 
+          error: `Network Error: You are connected to network ${chainId}. Please switch to Polygon Amoy Testnet (0x13881) in your MetaMask wallet settings and try again.` 
+        };
+      }
+      
+      // Check again after the switch attempt
+      const newChainId = await window.ethereum.request({ method: 'eth_chainId' });
+      if (newChainId !== '0x13881') {
+        return { 
+          success: false, 
+          error: `Failed to switch to Polygon Amoy Testnet. Please switch manually in your MetaMask wallet.` 
+        };
+      }
     }
 
     await window.ethereum.request({ method: 'eth_requestAccounts' });
