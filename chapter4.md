@@ -414,40 +414,7 @@ The unit testing strategy focused on isolated testing of individual components:
 
 ### 5.3 Integration Testing
 
-```mermaid
-flowchart TD
-    A[Setup Test Environment] --> B[Initialize Contract Connection]
-    B --> C[Create Test Election]
-    C --> D[Activate Election]
-    D --> E[Execute Test Cases]
-    
-    E --> F[Vote Casting Tests]
-    E --> G[Query Function Tests]
-    E --> H[Admin Function Tests]
-    
-    F --> F1[Single Vote Test]
-    F --> F2[Double Vote Prevention Test]
-    F --> F3[Invalid Vote Test]
-    
-    G --> G1[Election Info Retrieval]
-    G --> G2[Candidate Data Retrieval]
-    G --> G3[Vote Status Verification]
-    
-    H --> H1[Permission Tests]
-    H --> H2[Election Management Tests]
-    
-    subgraph "Integration Test Results"
-        I[Test Reports]
-        J[Coverage Analysis]
-        K[Performance Metrics]
-    end
-    
-    F --> I
-    G --> I
-    H --> I
-    I --> J
-    I --> K
-```
+*[See Integration Testing Flow diagram in diagrams.md]*
 
 Integration testing validated the interaction between system components:
 
@@ -476,53 +443,7 @@ Integration testing validated the interaction between system components:
 
 ### 5.4 End-to-End Testing
 
-```mermaid
-sequenceDiagram
-    participant User
-    participant Browser
-    participant Frontend
-    participant API
-    participant DB
-    participant Blockchain
-    
-    Note over User,Blockchain: E2E Test: Complete Voting Flow
-    
-    User->>Browser: Visit Voting Page
-    Browser->>Frontend: Render Application
-    Frontend->>Browser: Display Wallet Connection
-    
-    User->>Browser: Connect Wallet (Mocked)
-    Browser->>Frontend: Send Wallet Address
-    Frontend->>API: Verify Wallet Status
-    API->>DB: Query User Registration
-    DB-->>API: Return Registration Status
-    API-->>Frontend: Confirm Registration
-    
-    Frontend->>Browser: Display NIN Entry Form
-    User->>Browser: Enter NIN
-    Browser->>Frontend: Submit NIN
-    Frontend->>API: Validate NIN
-    API-->>Frontend: NIN Accepted
-    
-    Frontend->>API: Request Candidate List
-    API->>Blockchain: Query Active Election
-    Blockchain-->>API: Return Election Data
-    API-->>Frontend: Provide Candidate Options
-    Frontend->>Browser: Display Candidate Grid
-    
-    User->>Browser: Select Candidate
-    Browser->>Frontend: Register Selection
-    User->>Browser: Click "Cast Vote"
-    
-    Frontend->>Blockchain: Submit Vote Transaction
-    Blockchain-->>Frontend: Return Transaction Hash
-    Frontend->>API: Update Voting Status
-    API->>DB: Mark User as Voted
-    DB-->>API: Confirm Status Update
-    
-    Frontend->>Browser: Display Confirmation Screen
-    Browser->>User: Show Success Message
-```
+*[See End-to-End Voting Flow diagram in diagrams.md]*
 
 End-to-end testing validated complete user flows through the system:
 
@@ -549,7 +470,6 @@ End-to-end testing validated complete user flows through the system:
    - Invalid input handling at multiple levels
    - Transaction failure recovery mechanisms
    - User guidance through error conditions
-```
 
 ### 5.5 Testing Results
 
@@ -578,49 +498,13 @@ Each issue was documented, prioritized, and resolved before deployment.
 
 The BlockVote system is deployed using a phased approach to ensure stability and security:
 
-```mermaid
-gantt
-    title Deployment Timeline
-    dateFormat  YYYY-MM-DD
-    section Preparation
-    Environment Setup           :prep1, 2025-01-15, 7d
-    Smart Contract Audit        :prep2, after prep1, 14d
-    section Deployment
-    Contract Deployment         :dep1, after prep2, 3d
-    Backend API Deployment      :dep2, after prep1, 5d
-    Frontend Deployment         :dep3, after dep2, 3d
-    section Testing
-    Integration Verification    :test1, after dep3, 5d
-    User Acceptance Testing     :test2, after test1, 7d
-    section Launch
-    System Monitoring           :launch1, after test2, 3d
-    Public Launch               :milestone, after launch1, 0d
-```
+*[See Deployment Timeline diagram in diagrams.md]*
 
 ### 6.2 Deployment Architecture
 
 The system is deployed across multiple environments to ensure reliability and separation of concerns:
 
-```mermaid
-graph TD
-    subgraph "Production Environment"
-        A[Vercel Frontend] --> B[Express API Server]
-        B --> C[Supabase Database]
-        A --> D[Polygon Blockchain]
-    end
-    
-    subgraph "Staging Environment"
-        E[Staging Frontend] --> F[Staging API Server]
-        F --> G[Test Database]
-        E --> H[Polygon Testnet]
-    end
-    
-    subgraph "Development Environment"
-        I[Local Frontend] --> J[Local API Server]
-        J --> K[Local Database]
-        I --> L[Local Blockchain]
-    end
-```
+*[See Deployment Architecture diagram in diagrams.md]*
 
 ### 6.3 Scaling Strategy
 
