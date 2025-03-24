@@ -4,41 +4,7 @@
 
 ### 1.1 Architecture Overview
 
-```mermaid
-graph TD
-    subgraph "Frontend Layer"
-        UI[React User Interface]
-        MetaMask[MetaMask Integration]
-        PhantomWallet[Phantom Wallet Integration]
-    end
-    
-    subgraph "Backend Services"
-        ExpressAPI[Express.js API Server]
-        AuthService[Authentication Service]
-        DBService[Database Service]
-    end
-    
-    subgraph "Blockchain Layer"
-        SmartContract[Voting Smart Contract]
-        Blockchain[Polygon Amoy Testnet]
-        BlockExplorer[Transaction Explorer]
-    end
-    
-    subgraph "Data Storage"
-        Supabase[(Supabase Database)]
-    end
-    
-    UI --> MetaMask
-    UI --> PhantomWallet
-    UI --> ExpressAPI
-    MetaMask --> SmartContract
-    PhantomWallet --> SmartContract
-    ExpressAPI --> AuthService
-    ExpressAPI --> DBService
-    DBService --> Supabase
-    SmartContract --> Blockchain
-    Blockchain --> BlockExplorer
-```
+*[See Architecture Overview diagram in diagrams.md]*
 
 ### 1.2 Component Interactions
 
@@ -69,35 +35,7 @@ The BlockVote system architecture consists of four main layers that work togethe
 
 ### 1.3 Data Flow
 
-```mermaid
-sequenceDiagram
-    participant Voter
-    participant UI as User Interface
-    participant API as Express API
-    participant DB as Supabase
-    participant SC as Smart Contract
-    participant BC as Blockchain
-    
-    Voter->>UI: Register with NIN
-    UI->>API: Submit registration
-    API->>DB: Store voter information
-    DB-->>API: Confirmation
-    API-->>UI: Registration status
-    UI-->>Voter: Registration complete
-    
-    Voter->>UI: Connect wallet
-    UI->>Voter: Request wallet connection
-    Voter->>UI: Approve connection
-    
-    Voter->>UI: Cast vote for candidate
-    UI->>SC: Send vote transaction
-    SC->>BC: Record vote on blockchain
-    BC-->>SC: Transaction confirmation
-    SC-->>UI: Vote confirmation
-    UI->>API: Update voter status
-    API->>DB: Mark as voted
-    UI-->>Voter: Vote confirmed with receipt
-```
+*[See Data Flow diagram in diagrams.md]*
 
 ## 2. Implementation of Key Features
 
@@ -107,53 +45,7 @@ The BlockVote system implements a secure voter registration process that combine
 
 #### Registration Flow
 
-```mermaid
-sequenceDiagram
-    Actor Voter
-    participant UI as Registration Form
-    participant Validation as Form Validation
-    participant Web3 as Web3 Wallet
-    participant API as Submission Service
-    participant DB as Database
-    
-    Voter->>UI: Enter NIN Details
-    UI->>Validation: Validate Format
-    Validation-->>UI: Format Valid/Invalid
-    
-    alt Invalid Format
-        UI-->>Voter: Show Format Error
-    else Valid Format
-        UI->>Web3: Check Wallet Connection
-        
-        alt Wallet Not Connected
-            Web3-->>UI: Return Not Connected
-            UI-->>Voter: Request Wallet Connection
-        else Wallet Connected
-            Web3-->>UI: Return Wallet Address
-            UI->>API: Submit NIN with Wallet Address
-            API->>DB: Check if NIN locked by admin
-            DB-->>API: Lock Status
-            
-            alt NIN Submission Locked
-                API-->>UI: Return Locked Error
-                UI-->>Voter: Display Lock Message
-            else Submission Allowed
-                API->>DB: Check if Wallet Already Registered
-                DB-->>API: Existing Registration
-                
-                alt Already Registered
-                    API-->>UI: Return Already Registered Error
-                    UI-->>Voter: Display Already Registered Message
-                else Not Registered
-                    API->>DB: Save NIN with Pending Status
-                    DB-->>API: Confirm Save
-                    API-->>UI: Return Success
-                    UI-->>Voter: Display Confirmation Message
-                end
-            end
-        end
-    end
-```
+*[See Registration Flow diagram in diagrams.md]*
 
 The voter registration flow follows a structured process to ensure security and data integrity:
 
@@ -176,22 +68,7 @@ The entire flow incorporates multiple validation checks and error handling to en
 
 #### Security Measures
 
-```mermaid
-graph TD
-    subgraph "Security Infrastructure"
-        A[Input Validation] --> B[Format Verification]
-        A[Input Validation] --> C[Checksum Validation]
-        
-        D[Binding Mechanism] --> E[Wallet-NIN Linkage]
-        D[Binding Mechanism] --> F[Duplicate Prevention]
-        
-        G[Data Protection] --> H[Hashing Algorithm]
-        G[Data Protection] --> I[Admin Verification]
-        
-        J[Access Control] --> K[Role-Based Permissions]
-        J[Access Control] --> L[Administrative Lock]
-    end
-```
+*[See Security Measures diagram in diagrams.md]*
 
 1. **NIN Validation System**:
    - Format validation ensures NIN matches country-specific patterns
@@ -224,45 +101,7 @@ The ballot casting process is the core feature of the BlockVote system, where th
 
 #### Vote Casting Flow
 
-```mermaid
-sequenceDiagram
-    participant Voter
-    participant UI as User Interface
-    participant Crypto as Cryptography Service
-    participant Web3 as Web3 Provider
-    participant SC as Smart Contract
-    participant BC as Blockchain
-    participant DB as Database
-    
-    Voter->>UI: Select Candidate
-    Voter->>UI: Click "Cast Vote"
-    
-    UI->>Crypto: Request NIN Hashing
-    Crypto-->>UI: Return Hash Value
-    
-    UI->>Web3: Initialize Provider
-    Web3->>Voter: Request Transaction Approval
-    Voter->>Web3: Confirm Transaction
-    
-    Web3->>SC: Check if Already Voted
-    SC-->>Web3: Return Voting Status
-    
-    alt Already Voted
-        Web3-->>UI: Return Error
-        UI-->>Voter: Display "Already Voted" Message
-    else Not Voted Yet
-        Web3->>SC: Send Vote Transaction
-        SC->>BC: Record Vote on Blockchain
-        BC-->>SC: Confirm Transaction
-        SC-->>Web3: Return Transaction Receipt
-        Web3-->>UI: Provide Transaction Hash
-        
-        UI->>DB: Update Voter Status
-        DB-->>UI: Confirm Status Update
-        
-        UI-->>Voter: Display Confirmation Screen
-    end
-```
+*[See Vote Casting Flow diagram in diagrams.md]*
 
 The vote casting process follows these steps:
 
@@ -291,27 +130,7 @@ The vote casting process follows these steps:
 
 #### Blockchain Vote Recording Mechanism
 
-```mermaid
-graph TD
-    subgraph "Voting Transaction Flow"
-        A[Vote Initiation] --> B[Identity Verification]
-        B --> C[Duplicate Vote Check]
-        
-        C -->|Not Voted| D[Smart Contract Call]
-        C -->|Already Voted| E[Error Response]
-        
-        D --> F[Transaction Creation]
-        F --> G[Transaction Signing]
-        G --> H[Network Broadcasting]
-        
-        H --> I[Blockchain Validation]
-        I --> J[Block Creation]
-        J --> K[Transaction Confirmation]
-        
-        K --> L[Receipt Generation]
-        L --> M[Status Update]
-    end
-```
+*[See Blockchain Vote Recording Mechanism diagram in diagrams.md]*
 
 The blockchain recording process involves several technical components:
 
