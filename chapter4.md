@@ -156,23 +156,7 @@ The blockchain recording process involves several technical components:
 
 #### Anonymity and Privacy Mechanisms
 
-```mermaid
-graph TD
-    subgraph "Privacy Protection Framework"
-        A[Voter Identity] --> B[Cryptographic Hashing]
-        B --> C[SHA-256 Algorithm]
-        C --> D[NIN Hash Generation]
-        
-        E[Smart Contract] --> F[Hash-Based Verification]
-        F --> G[Double-Voting Prevention]
-        
-        H[Database Design] --> I[Data Segregation]
-        I --> J[No Vote-Identity Links]
-        
-        K[Network Privacy] --> L[Encrypted Connections]
-        L --> M[Secure Data Transmission]
-    end
-```
+*[See Anonymity and Privacy Mechanisms diagram in diagrams.md]*
 
 The system implements multiple layers of privacy protection to ensure voter anonymity while maintaining election integrity:
 
@@ -204,50 +188,7 @@ The system implements multiple layers of privacy protection to ensure voter anon
 
 ### 3.1 Smart Contract Structure
 
-```mermaid
-classDiagram
-    class VotingSystem {
-        +address admin
-        +uint256 activeElectionId
-        +uint256 electionCount
-        +mapping(uint256 => Election) elections
-        +constructor()
-        +createElection(name, startTime, endTime, candidateNames, candidateParties) uint256
-        +activateElection(electionId) void
-        +castVote(electionId, candidateId, voterHash) void
-        +changeAdmin(newAdmin) void
-        +getElectionInfo(electionId) tuple
-        +getCandidate(electionId, candidateId) tuple
-        +hasVoted(electionId, voterHash) bool
-        +getActiveElectionId() uint256
-    }
-    
-    class Election {
-        +string name
-        +uint256 startTime
-        +uint256 endTime
-        +bool active
-        +uint256 candidateCount
-        +mapping(uint256 => Candidate) candidates
-        +mapping(bytes32 => bool) hasVoted
-    }
-    
-    class Candidate {
-        +string name
-        +string party
-        +uint256 votes
-    }
-    
-    class Events {
-        +ElectionCreated(electionId, name)
-        +VoteCast(electionId, candidateId)
-        +AdminChanged(oldAdmin, newAdmin)
-    }
-    
-    VotingSystem "1" -- "many" Election : manages
-    Election "1" -- "many" Candidate : contains
-    VotingSystem -- Events : emits
-```
+*[See Smart Contract Structure diagram in diagrams.md]*
 
 The BlockVote smart contract architecture is centered around a main `VotingSystem` contract that manages all election-related functionality. The contract was developed using Solidity and deployed on the Polygon Amoy testnet.
 
@@ -347,43 +288,13 @@ The smart contract implements several security measures:
 ### 4.1 User Interface Wireframes
 
 #### Voter Registration Page
-```mermaid
-graph TD
-    subgraph Voter Registration Screen
-        A[Header/Navigation] --> B[Registration Form]
-        B --> C[NIN Input Field]
-        B --> D[Terms & Conditions Checkbox]
-        B --> E[Submit Button]
-        F[Wallet Connection Status] --> G[Connect Wallet Button]
-    end
-```
+*[See Voter Registration Page wireframe in diagrams.md]*
 
 #### Voting Page
-```mermaid
-graph TD
-    subgraph Voting Screen
-        A[Header/Navigation] --> B[Active Election Information]
-        B --> C[Countdown Timer]
-        A --> D[Candidate Selection Grid]
-        D --> E[Candidate Cards]
-        E --> F[Vote Button]
-        F --> G[Transaction Confirmation]
-    end
-```
+*[See Voting Page wireframe in diagrams.md]*
 
 #### Admin Dashboard
-```mermaid
-graph TD
-    subgraph Admin Dashboard
-        A[Admin Header] --> B[Election Management]
-        A --> C[NIN Verification Panel]
-        A --> D[System Settings]
-        B --> E[Create Election Form]
-        B --> F[Election Status Controls]
-        C --> G[NIN Approval Table]
-        D --> H[Admin Controls]
-    end
-```
+*[See Admin Dashboard wireframe in diagrams.md]*
 
 ### 4.2 User Interface Implementation
 
@@ -391,26 +302,7 @@ The user interface was implemented using React with TypeScript, Tailwind CSS for
 
 #### Voting Interface Architecture
 
-```mermaid
-graph TD
-    subgraph "Vote Page Component Architecture"
-        A[Vote Page] --> B[State Management]
-        A --> C[Component Flow]
-        A --> D[API Integration]
-        
-        B --> B1[User Input State]
-        B --> B2[Election Data State]
-        B --> B3[Transaction State]
-        
-        C --> C1[Wallet Connection]
-        C --> C2[NIN Entry]
-        C --> C3[Candidate Selection]
-        C --> C4[Transaction Confirmation]
-        
-        D --> D1[Blockchain Calls]
-        D --> D2[Database Updates]
-    end
-```
+*[See Voting Interface Architecture diagram in diagrams.md]*
 
 The voting interface follows a multi-stage wizard pattern to guide users through the voting process:
 
@@ -440,30 +332,7 @@ The voting interface follows a multi-stage wizard pattern to guide users through
 
 #### Admin Interface Architecture
 
-```mermaid
-graph TD
-    subgraph "Admin Dashboard Architecture"
-        A[Admin Dashboard] --> B[Authentication Layer]
-        A --> C[Management Modules]
-        
-        B --> B1[Admin Wallet Verification]
-        B --> B2[Permission System]
-        
-        C --> C1[Election Creator]
-        C --> C2[NIN Manager]
-        C --> C3[System Settings]
-        
-        C1 --> D1[Form Management]
-        C1 --> D2[Candidate Controls]
-        C1 --> D3[Date Selection]
-        
-        C2 --> E1[Verification Controls]
-        C2 --> E2[Voter Database]
-        
-        C3 --> F1[Admin Transfer]
-        C3 --> F2[System Lockdown]
-    end
-```
+*[See Admin Interface Architecture diagram in diagrams.md]*
 
 The admin interface provides administrative tools for managing elections and voter verification:
 
@@ -511,52 +380,11 @@ The admin interface provides administrative tools for managing elections and vot
 
 The BlockVote system was tested using a comprehensive approach that covered all aspects of the application:
 
-```mermaid
-graph TD
-    A[Testing Strategy] --> B[Unit Testing]
-    A --> C[Integration Testing]
-    A --> D[End-to-End Testing]
-    A --> E[User Acceptance Testing]
-    
-    B --> B1[Smart Contract Functions]
-    B --> B2[React Components]
-    B --> B3[Utility Functions]
-    
-    C --> C1[Contract-Frontend Integration]
-    C --> C2[Database-Backend Integration]
-    C --> C3[API Endpoint Testing]
-    
-    D --> D1[Voter Registration Flow]
-    D --> D2[Voting Process Flow]
-    D --> D3[Admin Management Flow]
-    
-    E --> E1[Usability Testing]
-    E --> E2[Security Testing]
-    E --> E3[Performance Testing]
-```
+*[See Testing Approach diagram in diagrams.md]*
 
 ### 5.2 Unit Testing
 
-```mermaid
-graph TD
-    subgraph "Unit Testing Framework"
-        A[Test Suites] --> B[Smart Contract Tests]
-        A --> C[UI Component Tests]
-        A --> D[Utility Function Tests]
-        
-        B --> B1[Election Creation Tests]
-        B --> B2[Vote Casting Tests]
-        B --> B3[Admin Functions Tests]
-        
-        C --> C1[Form Validation Tests]
-        C --> C2[UI Rendering Tests]
-        C --> C3[State Management Tests]
-        
-        D --> D1[NIN Hashing Tests]
-        D --> D2[Data Formatting Tests]
-        D --> D3[Validation Function Tests]
-    end
-```
+*[See Unit Testing Framework diagram in diagrams.md]*
 
 The unit testing strategy focused on isolated testing of individual components:
 
