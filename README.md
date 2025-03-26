@@ -1,5 +1,5 @@
 # BlockVote - Blockchain Voting Platform
-
+![BlockVote](homepage.jpg)
 
 BlockVote is a secure, transparent and user-friendly blockchain-based voting platform built on the Polygon Amoy testnet. It enables trustworthy election management with complete transparency and verifiability.
 
