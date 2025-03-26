@@ -1,13 +1,13 @@
 // Vercel serverless function for API routes
 import express from 'express';
-import { registerRoutes } from '../server/routes.js';
-import { log } from '../server/vite.js';
+import { registerRoutes } from '../server/routes';
+import { storage } from '../server/storage';
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-// Set up API logging middleware
+// Simple logging middleware for Vercel environment
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
@@ -31,11 +31,31 @@ app.use((req, res, next) => {
         logLine = logLine.slice(0, 79) + "…";
       }
 
-      log(logLine);
+      console.log(logLine);
     }
   });
 
   next();
+});
+
+// Set up CORS for Vercel deployment
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE');
+  res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With,content-type');
+  res.setHeader('Access-Control-Allow-Credentials', true);
+  
+  // Handle OPTIONS method
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  
+  next();
+});
+
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
 // Set up error handling middleware
@@ -46,7 +66,7 @@ app.use((err, _req, res, _next) => {
   res.status(status).json({ message });
 });
 
-// Initialize the server
+// Initialize the server with API routes
 (async () => {
   await registerRoutes(app);
 })();
