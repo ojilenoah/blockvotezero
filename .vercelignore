@@ -12,3 +12,14 @@ README.md
 replit.nix
 replit.toml
 .replit
+
+# Test files and scripts
+test-*.js
+test-*.mjs
+show-*.js
+show-*.mjs
+*-test.js
+*-test.ts
+chapter4.md
+diagrams.md
+attached_assets/
