@@ -1,0 +1,14 @@
+.git
+.vscode
+/.github
+node_modules
+.env.local
+README.md
+*.log
+.DS_Store
+.replit
+.upm
+.config
+replit.nix
+replit.toml
+.replit
