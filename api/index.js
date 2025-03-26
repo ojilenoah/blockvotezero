@@ -2,6 +2,7 @@
 import express from 'express';
 import { registerRoutes } from '../server/routes';
 import { storage } from '../server/storage';
+import { setupEnv } from '../vercel.mjs';
 
 const app = express();
 app.use(express.json());
@@ -55,20 +56,48 @@ app.use((req, res, next) => {
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
-  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.status(200).json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
+    apiVersion: '1.0.0'
+  });
+});
+
+// Blockchain information endpoint
+app.get('/api/blockchain/info', (req, res) => {
+  res.status(200).json({
+    contractAddress: process.env.VITE_CONTRACT_ADDRESS || 'Not configured',
+    network: 'Polygon Amoy Testnet',
+    timestamp: new Date().toISOString()
+  });
 });
 
 // Set up error handling middleware
 app.use((err, _req, res, _next) => {
+  console.error('API Error:', err);
   const status = err.status || err.statusCode || 500;
   const message = err.message || "Internal Server Error";
 
-  res.status(status).json({ message });
+  res.status(status).json({ 
+    message, 
+    timestamp: new Date().toISOString() 
+  });
 });
 
-// Initialize the server with API routes
+// Initialize environment variables and server routes
 (async () => {
-  await registerRoutes(app);
+  try {
+    // Set up environment variables for Vercel deployment
+    await setupEnv();
+    
+    // Register application routes
+    await registerRoutes(app);
+    
+    console.log('API routes registered successfully');
+  } catch (error) {
+    console.error('Failed to initialize API server:', error);
+  }
 })();
 
 // Export the Express API for Vercel

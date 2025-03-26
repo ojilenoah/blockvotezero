@@ -32,5 +32,15 @@
       "memory": 1024,
       "maxDuration": 10
     }
-  }
+  },
+  "builds": [
+    {
+      "src": "api/index.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "dist/public/**/*",
+      "use": "@vercel/static"
+    }
+  ]
 }
