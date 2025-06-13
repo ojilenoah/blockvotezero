@@ -210,32 +210,48 @@ export const getElectionInfo = async (electionId: number): Promise<ElectionInfo 
   }
 };
 
-// Get all candidates for an election
+// Get all candidates for an election with caching
 export const getAllCandidates = async (electionId: number): Promise<Candidate[]> => {
+  const cacheKey = `candidates_${electionId}`;
+  const cached = cache.get<Candidate[]>(cacheKey);
+  if (cached !== null) return cached;
+
   const contract = getReadOnlyContract();
   try {
     const result = await contract.getAllCandidates(electionId);
 
-    return result.names.map((name: string, i: number) => ({
+    const candidates = result.names.map((name: string, i: number) => ({
       name,
       party: result.parties[i],
       votes: Number(result.votesCounts[i]),
       index: i
     }));
+    
+    cache.set(cacheKey, candidates, 60000); // Cache for 1 minute
+    return candidates;
   } catch (error) {
     console.error(`Error getting candidates for election ${electionId}:`, error);
-    return [];
+    const emptyResult: Candidate[] = [];
+    cache.set(cacheKey, emptyResult, 30000); // Cache empty result for 30 seconds
+    return emptyResult;
   }
 };
 
-// Get total votes in an election
+// Get total votes in an election with caching
 export const getTotalVotes = async (electionId: number): Promise<number> => {
+  const cacheKey = `totalVotes_${electionId}`;
+  const cached = cache.get<number>(cacheKey);
+  if (cached !== null) return cached;
+
   const contract = getReadOnlyContract();
   try {
     const total = await contract.getTotalVotes(electionId);
-    return Number(total);
+    const result = Number(total);
+    cache.set(cacheKey, result, 60000); // Cache for 1 minute
+    return result;
   } catch (error) {
     console.error(`Error getting total votes for election ${electionId}:`, error);
+    cache.set(cacheKey, 0, 30000); // Cache error result for 30 seconds
     return 0;
   }
 };
@@ -414,11 +430,15 @@ export interface Election {
   endTime: string;
 }
 
-// Get transactions for our contract - Direct block scanning implementation
+// Get transactions for our contract with caching and optimization
 export const getContractTransactions = async (
   startBlock?: number,
   pageSize: number = 10
 ): Promise<PaginatedTransactions> => {
+  const cacheKey = `transactions_${startBlock || 'latest'}_${pageSize}`;
+  const cached = cache.get<PaginatedTransactions>(cacheKey);
+  if (cached !== null) return cached;
+
   try {
     console.log("Starting getContractTransactions with startBlock:", startBlock);
     const provider = getProvider();
@@ -537,13 +557,19 @@ export const getContractTransactions = async (
     const hasMore = transactions.length > 0 && endBlock > 0;
     const nextBlock = hasMore && oldestTx ? oldestTx.blockNumber - 1 : undefined;
 
-    return {
+    const result = {
       transactions,
       hasMore,
       nextBlock
     };
+    
+    // Cache the result for 2 minutes
+    cache.set(cacheKey, result, 120000);
+    return result;
   } catch (error) {
     console.error("Error fetching contract transactions:", error);
-    return { transactions: [], hasMore: false };
+    const errorResult = { transactions: [], hasMore: false };
+    cache.set(cacheKey, errorResult, 30000); // Cache error for 30 seconds
+    return errorResult;
   }
 };
