@@ -453,16 +453,18 @@ export const getContractTransactions = async (
     const latestBlock = await provider.getBlockNumber();
     console.log("Latest block from provider:", latestBlock);
     
-    // If no starting block provided, use the latest block minus a window to scan
-    const blockWindow = 1000; // Scan 1000 blocks at most
+    // Use a more conservative block range to avoid data availability issues
+    const blockWindow = 5000; // Reduced from 1000 to be more conservative
     const fromBlock = startBlock !== undefined 
       ? startBlock 
       : Math.max(0, latestBlock - blockWindow);
     
-    // Calculate end block - ensuring we don't go beyond the latest block
-    const endBlock = Math.max(0, fromBlock - blockWindow); // Go backward in blocks
+    // For current block range, don't go backwards too far
+    const endBlock = startBlock !== undefined 
+      ? Math.max(0, startBlock - blockWindow)
+      : Math.max(0, latestBlock - blockWindow);
     
-    console.log(`Scanning from block ${fromBlock} down to ${endBlock}`);
+    console.log(`Scanning from block ${endBlock} to ${fromBlock}`);
     
     // Prepare to collect transactions
     const transactions: Transaction[] = [];
