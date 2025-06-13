@@ -1,6 +1,7 @@
 import { ethers } from "ethers";
 import VotingSystemABI from "../contracts/VotingSystem.json";
 import { Candidate } from "../types/candidate";
+import { cache } from "../lib/cache";
 
 // Contract address from deployment
 export const CONTRACT_ADDRESS = '0xc0895D39fBBD1918067d5Fa41beDAF51d36665B5';
@@ -166,31 +167,45 @@ export const createElection = async (
 
 // Get active election ID
 export const getActiveElectionId = async (): Promise<number> => {
+  const cacheKey = 'activeElectionId';
+  const cached = cache.get<number>(cacheKey);
+  if (cached !== null) return cached;
+
   const contract = getReadOnlyContract();
   try {
     const currentId = await contract.currentElectionId();
-    return Number(currentId);
+    const result = Number(currentId);
+    cache.set(cacheKey, result, 30000); // Cache for 30 seconds
+    return result;
   } catch (error) {
     console.error("Error getting active election ID:", error);
     return 0;
   }
 };
 
-// Get election info
+// Get election info with caching
 export const getElectionInfo = async (electionId: number): Promise<ElectionInfo | null> => {
+  const cacheKey = `electionInfo_${electionId}`;
+  const cached = cache.get<ElectionInfo | null>(cacheKey);
+  if (cached !== null) return cached;
+
   const contract = getReadOnlyContract();
   try {
     const info = await contract.getElectionInfo(electionId);
 
-    return {
+    const result = {
       name: info.name,
       startTime: new Date(Number(info.startTime) * 1000),
       endTime: new Date(Number(info.endTime) * 1000),
       active: info.active,
       candidateCount: Number(info.candidateCount)
     };
+    
+    cache.set(cacheKey, result, 120000); // Cache for 2 minutes
+    return result;
   } catch (error) {
     console.error(`Error getting election info for ID ${electionId}:`, error);
+    cache.set(cacheKey, null, 30000); // Cache error for 30 seconds
     return null;
   }
 };
