@@ -24,9 +24,7 @@ export function Footer() {
             </a>
           </div>
           <div className="mt-8 md:mt-0">
-            <p className="text-center text-base text-gray-400">
-              &copy; 2023 BlockVote. All rights reserved.
-            </p>
+            <p className="text-center text-base text-gray-400">© 2025 BlockVote. All rights reserved.</p>
           </div>
         </div>
       </div>
