@@ -7,7 +7,7 @@ import { cache } from "../lib/cache";
 export const CONTRACT_ADDRESS = '0xc0895D39fBBD1918067d5Fa41beDAF51d36665B5';
 
 // Alchemy provider URL
-export const ALCHEMY_URL = 'https://polygon-mainnet.g.alchemy.com/v2/E822ZzOp7UFQy6Zt82uF4hzcdklL-qoe';
+export const ALCHEMY_URL = 'https://polygon-amoy.g.alchemy.com/v2/E822ZzOp7UFQy6Zt82uF4hzcdklL-qoe';
 
 // Types for blockchain interactions
 export interface ElectionInfo {
