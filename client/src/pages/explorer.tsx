@@ -134,104 +134,165 @@ export default function Explorer() {
         const latestBlock = await provider.getBlockNumber();
         console.log("Latest block:", latestBlock);
         
-        // Use a very recent block range to avoid data availability issues
-        const blockRange = 2000; // Much smaller range to stay within available data
-        const fromBlock = Math.max(0, latestBlock - blockRange);
-        
-        console.log(`Scanning from block ${fromBlock} to ${latestBlock}`);
-        
         const processedTransactions: Transaction[] = [];
         
-        // Try multiple block ranges to find available data
-        const blockRanges = [2000, 5000, 10000, 20000];
-        let foundEvents = false;
-        
-        for (const range of blockRanges) {
-          if (foundEvents) break;
+        // Try different approaches to get transaction data
+        try {
+          // Approach 1: Try to get recent transactions from a much larger historical range
+          // Polygon Amoy testnet has been running for a while, so we need to check older blocks
+          const maxHistoricalBlocks = 100000; // Go back much further
+          const startBlock = Math.max(0, latestBlock - maxHistoricalBlocks);
           
-          const startBlock = Math.max(0, latestBlock - range);
-          console.log(`Trying range: ${startBlock} to ${latestBlock}`);
+          console.log(`Scanning historical range: ${startBlock} to ${latestBlock}`);
           
-          try {
-            // Get ElectionCreated events
-            const electionCreatedFilter = contract.filters.ElectionCreated();
-            const electionEvents = await contract.queryFilter(electionCreatedFilter, startBlock, latestBlock);
-            console.log(`Found ${electionEvents.length} ElectionCreated events in range ${range}`);
-            
-            for (const event of electionEvents) {
-              try {
-                // Use a more robust approach - try to get basic transaction info first
-                const basicTx = await provider.getTransaction(event.transactionHash);
-                if (basicTx) {
-                  processedTransactions.push({
-                    hash: event.transactionHash,
-                    timestamp: new Date(),
-                    from: basicTx.from,
-                    to: CONTRACT_ADDRESS,
-                    value: "0",
-                    asset: "MATIC",
-                    status: "Success",
-                    functionName: "createElection"
-                  });
-                  foundEvents = true;
-                }
-              } catch (txError) {
-                // Skip problematic transactions
-                continue;
+          // Get ElectionCreated events from broader range
+          const electionCreatedFilter = contract.filters.ElectionCreated();
+          const electionEvents = await contract.queryFilter(electionCreatedFilter, startBlock, latestBlock);
+          console.log(`Found ${electionEvents.length} ElectionCreated events in historical range`);
+          
+          for (const event of electionEvents) {
+            try {
+              const tx = await provider.getTransaction(event.transactionHash);
+              const receipt = await provider.getTransactionReceipt(event.transactionHash);
+              const block = await provider.getBlock(event.blockNumber);
+              
+              if (tx && receipt && block) {
+                processedTransactions.push({
+                  hash: event.transactionHash,
+                  timestamp: new Date(block.timestamp * 1000),
+                  from: tx.from,
+                  to: CONTRACT_ADDRESS,
+                  value: ethers.formatEther(tx.value),
+                  asset: "MATIC",
+                  status: receipt.status === 1 ? "Success" : "Failed",
+                  functionName: "createElection"
+                });
               }
+            } catch (txError) {
+              console.warn(`Error processing election event ${event.transactionHash}:`, txError);
+              continue;
             }
-          } catch (error) {
-            console.log(`Error fetching ElectionCreated events for range ${range}:`, error);
           }
           
+          // Get VoteCast events from broader range
+          const voteCastFilter = contract.filters.VoteCast();
+          const voteEvents = await contract.queryFilter(voteCastFilter, startBlock, latestBlock);
+          console.log(`Found ${voteEvents.length} VoteCast events in historical range`);
+          
+          for (const event of voteEvents) {
+            try {
+              const tx = await provider.getTransaction(event.transactionHash);
+              const receipt = await provider.getTransactionReceipt(event.transactionHash);
+              const block = await provider.getBlock(event.blockNumber);
+              
+              if (tx && receipt && block) {
+                processedTransactions.push({
+                  hash: event.transactionHash,
+                  timestamp: new Date(block.timestamp * 1000),
+                  from: tx.from,
+                  to: CONTRACT_ADDRESS,
+                  value: ethers.formatEther(tx.value),
+                  asset: "MATIC",
+                  status: receipt.status === 1 ? "Success" : "Failed",
+                  functionName: "castVote"
+                });
+              }
+            } catch (txError) {
+              console.warn(`Error processing vote event ${event.transactionHash}:`, txError);
+              continue;
+            }
+          }
+          
+        } catch (error) {
+          console.error("Error fetching historical events:", error);
+          
+          // Approach 2: Fallback to using Alchemy's enhanced API if available
           try {
-            // Get VoteCast events
-            const voteCastFilter = contract.filters.VoteCast();
-            const voteEvents = await contract.queryFilter(voteCastFilter, startBlock, latestBlock);
-            console.log(`Found ${voteEvents.length} VoteCast events in range ${range}`);
+            console.log("Trying Alchemy enhanced API approach...");
             
-            for (const event of voteEvents) {
-              try {
-                const basicTx = await provider.getTransaction(event.transactionHash);
-                if (basicTx) {
-                  processedTransactions.push({
-                    hash: event.transactionHash,
-                    timestamp: new Date(),
-                    from: basicTx.from,
-                    to: CONTRACT_ADDRESS,
-                    value: "0",
-                    asset: "MATIC",
-                    status: "Success",
-                    functionName: "castVote"
-                  });
-                  foundEvents = true;
+            // Use Alchemy's getAssetTransfers method as a fallback
+            const response = await fetch(ALCHEMY_URL, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                id: 1,
+                jsonrpc: '2.0',
+                method: 'alchemy_getAssetTransfers',
+                params: [{
+                  fromBlock: `0x${(latestBlock - 50000).toString(16)}`,
+                  toBlock: 'latest',
+                  toAddress: CONTRACT_ADDRESS,
+                  category: ['external', 'internal'],
+                  withMetadata: true,
+                  excludeZeroValue: false,
+                  maxCount: 100
+                }]
+              })
+            });
+            
+            const alchemyData = await response.json();
+            console.log("Alchemy API response:", alchemyData);
+            
+            if (alchemyData.result && alchemyData.result.transfers) {
+              for (const transfer of alchemyData.result.transfers) {
+                try {
+                  const tx = await provider.getTransaction(transfer.hash);
+                  if (tx && tx.to?.toLowerCase() === CONTRACT_ADDRESS.toLowerCase()) {
+                    // Determine function name from transaction data
+                    let functionName = "unknown";
+                    if (tx.data && tx.data.length > 10) {
+                      const methodId = tx.data.slice(0, 10);
+                      const methodMap: { [key: string]: string } = {
+                        "0x9112c1eb": "createElection",
+                        "0x0121b93f": "castVote",
+                        "0xa3ec138d": "changeAdmin"
+                      };
+                      functionName = methodMap[methodId] || "unknown";
+                    }
+                    
+                    processedTransactions.push({
+                      hash: transfer.hash,
+                      timestamp: new Date(transfer.metadata?.blockTimestamp || Date.now()),
+                      from: transfer.from,
+                      to: transfer.to,
+                      value: transfer.value?.toString() || "0",
+                      asset: transfer.asset || "MATIC",
+                      status: "Success",
+                      functionName
+                    });
+                  }
+                } catch (txError) {
+                  console.warn(`Error processing Alchemy transfer ${transfer.hash}:`, txError);
+                  continue;
                 }
-              } catch (txError) {
-                continue;
               }
             }
-          } catch (error) {
-            console.log(`Error fetching VoteCast events for range ${range}:`, error);
+          } catch (alchemyError) {
+            console.error("Alchemy enhanced API also failed:", alchemyError);
           }
         }
         
-        // If still no transactions found, show a message explaining the data availability issue
-        if (processedTransactions.length === 0) {
-          console.log("No transactions found in available block range due to data pruning on testnet");
-        }
+        // Remove duplicates and sort by timestamp
+        const uniqueTransactions = processedTransactions.filter((tx, index, self) => 
+          index === self.findIndex(t => t.hash === tx.hash)
+        );
         
-        // Sort by timestamp descending (newest first)
-        processedTransactions.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+        uniqueTransactions.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
         
-        console.log(`Processed ${processedTransactions.length} total transactions`);
+        console.log(`Processed ${uniqueTransactions.length} unique transactions`);
         
         return {
-          transactions: processedTransactions,
-          totalTransactions: processedTransactions.length
+          transactions: uniqueTransactions,
+          totalTransactions: uniqueTransactions.length
         };
       } catch (error) {
         console.error('Error fetching transactions:', error);
-        throw error;
+        return {
+          transactions: [],
+          totalTransactions: 0
+        };
       }
     },
     staleTime: 30000,
