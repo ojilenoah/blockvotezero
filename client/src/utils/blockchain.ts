@@ -240,7 +240,9 @@ export const getElectionInfo = async (electionId: number): Promise<ElectionInfo 
 
   const contract = getReadOnlyContract();
   try {
-    const info = await contract.getElectionInfo(electionId);
+    const info = await rateLimiter.executeRequest(async () => {
+      return await contract.getElectionInfo(electionId);
+    });
 
     const result = {
       name: info.name,
@@ -267,7 +269,9 @@ export const getAllCandidates = async (electionId: number): Promise<Candidate[]>
 
   const contract = getReadOnlyContract();
   try {
-    const result = await contract.getAllCandidates(electionId);
+    const result = await rateLimiter.executeRequest(async () => {
+      return await contract.getAllCandidates(electionId);
+    });
 
     const candidates = result.names.map((name: string, i: number) => ({
       name,
@@ -294,7 +298,9 @@ export const getTotalVotes = async (electionId: number): Promise<number> => {
 
   const contract = getReadOnlyContract();
   try {
-    const total = await contract.getTotalVotes(electionId);
+    const total = await rateLimiter.executeRequest(async () => {
+      return await contract.getTotalVotes(electionId);
+    });
     const result = Number(total);
     cache.set(cacheKey, result, 60000); // Cache for 1 minute
     return result;
@@ -463,7 +469,9 @@ export const hashNIN = async (nin: string): Promise<string> => {
 export const isAdmin = async (address: string): Promise<boolean> => {
   try {
     const contract = getReadOnlyContract();
-    const admin = await contract.admin();
+    const admin = await rateLimiter.executeRequest(async () => {
+      return await contract.admin();
+    });
     return admin.toLowerCase() === address.toLowerCase();
   } catch (error) {
     console.error("Error checking admin status:", error);
