@@ -45,18 +45,20 @@ export interface TransactionResult {
   blockNumber?: number;
 }
 
-// Rate limiter to prevent Alchemy throughput issues
+// Enhanced rate limiter with retry logic for Alchemy API
 class RateLimiter {
   private requestQueue: Array<() => void> = [];
   private isProcessing = false;
   private lastRequestTime = 0;
-  private readonly minInterval = 120; // 120ms between requests = ~8 requests/second (well under 500 compute units/sec)
+  private readonly minInterval = 150; // 150ms between requests = ~6.7 requests/second
+  private readonly maxRetries = 3;
+  private readonly retryDelay = 2000; // 2 seconds between retries
 
   async executeRequest<T>(requestFn: () => Promise<T>): Promise<T> {
     return new Promise((resolve, reject) => {
       this.requestQueue.push(async () => {
         try {
-          const result = await requestFn();
+          const result = await this.retryRequest(requestFn);
           resolve(result);
         } catch (error) {
           reject(error);
@@ -64,6 +66,33 @@ class RateLimiter {
       });
       this.processQueue();
     });
+  }
+
+  private async retryRequest<T>(requestFn: () => Promise<T>): Promise<T> {
+    let lastError: any;
+    
+    for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
+      try {
+        return await requestFn();
+      } catch (error: any) {
+        lastError = error;
+        
+        // Check if it's a temporary Alchemy API error
+        const isTemporaryError = error?.info?.error?.code === -32001 || 
+                                error?.info?.error?.message?.includes("Unable to complete request") ||
+                                error?.info?.error?.message?.includes("Internal error");
+        
+        if (isTemporaryError && attempt < this.maxRetries) {
+          console.log(`Alchemy API temporary error, retrying attempt ${attempt}/${this.maxRetries}...`);
+          await new Promise(resolve => setTimeout(resolve, this.retryDelay * attempt));
+          continue;
+        }
+        
+        throw error;
+      }
+    }
+    
+    throw lastError;
   }
 
   private async processQueue() {
