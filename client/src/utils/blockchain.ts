@@ -6,8 +6,8 @@ import { cache } from "../lib/cache";
 // Contract address from deployment
 export const CONTRACT_ADDRESS = '0xc0895D39fBBD1918067d5Fa41beDAF51d36665B5';
 
-// Alchemy provider URL
-export const ALCHEMY_URL = 'https://polygon-amoy.g.alchemy.com/v2/xLeFDCZG65tLX5wTyfYyU';
+// Primary RPC URL - using public Polygon Amoy RPC due to Alchemy service issues
+export const ALCHEMY_URL = 'https://rpc-amoy.polygon.technology/';
 
 // Types for blockchain interactions
 export interface ElectionInfo {
