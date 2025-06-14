@@ -7,7 +7,7 @@ import VotingSystemABI from '../contracts/VotingSystem.json'; // This will be th
 const CONTRACT_ADDRESS = '0xc0895D39fBBD1918067d5Fa41beDAF51d36665B5';
 
 // Alchemy provider URL - Replace with your Alchemy API key
-const ALCHEMY_URL = 'https://polygon-amoy.g.alchemy.com/v2/E822ZzOp7UFQy6Zt82uF4hzcdklL-qoe';
+const ALCHEMY_URL = 'https://polygon-amoy.g.alchemy.com/v2/xLeFDCZG65tLX5wTyfYyU';
 
 // Initialize ethers provider
 const getProvider = () => {

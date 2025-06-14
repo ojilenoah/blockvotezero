@@ -7,7 +7,7 @@ import { cache } from "../lib/cache";
 export const CONTRACT_ADDRESS = '0xc0895D39fBBD1918067d5Fa41beDAF51d36665B5';
 
 // Alchemy provider URL
-export const ALCHEMY_URL = 'https://polygon-amoy.g.alchemy.com/v2/E822ZzOp7UFQy6Zt82uF4hzcdklL-qoe';
+export const ALCHEMY_URL = 'https://polygon-amoy.g.alchemy.com/v2/xLeFDCZG65tLX5wTyfYyU';
 
 // Types for blockchain interactions
 export interface ElectionInfo {
@@ -44,6 +44,53 @@ export interface TransactionResult {
   to?: string;
   blockNumber?: number;
 }
+
+// Rate limiter to prevent Alchemy throughput issues
+class RateLimiter {
+  private requestQueue: Array<() => void> = [];
+  private isProcessing = false;
+  private lastRequestTime = 0;
+  private readonly minInterval = 120; // 120ms between requests = ~8 requests/second (well under 500 compute units/sec)
+
+  async executeRequest<T>(requestFn: () => Promise<T>): Promise<T> {
+    return new Promise((resolve, reject) => {
+      this.requestQueue.push(async () => {
+        try {
+          const result = await requestFn();
+          resolve(result);
+        } catch (error) {
+          reject(error);
+        }
+      });
+      this.processQueue();
+    });
+  }
+
+  private async processQueue() {
+    if (this.isProcessing || this.requestQueue.length === 0) return;
+    
+    this.isProcessing = true;
+    
+    while (this.requestQueue.length > 0) {
+      const now = Date.now();
+      const timeSinceLastRequest = now - this.lastRequestTime;
+      
+      if (timeSinceLastRequest < this.minInterval) {
+        await new Promise(resolve => setTimeout(resolve, this.minInterval - timeSinceLastRequest));
+      }
+      
+      const request = this.requestQueue.shift();
+      if (request) {
+        this.lastRequestTime = Date.now();
+        await request();
+      }
+    }
+    
+    this.isProcessing = false;
+  }
+}
+
+const rateLimiter = new RateLimiter();
 
 // Initialize ethers provider
 const getProvider = () => {
@@ -173,7 +220,9 @@ export const getActiveElectionId = async (): Promise<number> => {
 
   const contract = getReadOnlyContract();
   try {
-    const currentId = await contract.currentElectionId();
+    const currentId = await rateLimiter.executeRequest(async () => {
+      return await contract.currentElectionId();
+    });
     const result = Number(currentId);
     cache.set(cacheKey, result, 30000); // Cache for 30 seconds
     return result;
