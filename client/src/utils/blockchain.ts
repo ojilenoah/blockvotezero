@@ -255,8 +255,16 @@ export const getActiveElectionId = async (): Promise<number> => {
     const result = Number(currentId);
     cache.set(cacheKey, result, 30000); // Cache for 30 seconds
     return result;
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error getting active election ID:", error);
+    
+    // Check for specific Alchemy API errors
+    if (error?.info?.error?.code === -32001) {
+      console.error("Alchemy API Error: Your new Alchemy project may need Enhanced APIs enabled for Polygon Amoy");
+    } else if (error?.info?.error?.code === -32000) {
+      console.error("Alchemy API Error: Internal error - check if Enhanced APIs are enabled");
+    }
+    
     return 0;
   }
 };
