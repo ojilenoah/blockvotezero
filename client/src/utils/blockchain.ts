@@ -2,12 +2,55 @@ import { ethers } from "ethers";
 import VotingSystemABI from "../contracts/VotingSystem.json";
 import { Candidate } from "../types/candidate";
 import { cache } from "../lib/cache";
+import * as demo from "./demo-backend";
+
+// Demo mode — when set, every blockchain call routes to Supabase-backed
+// mocks (see demo-backend.ts). OFF by default: the live contract at
+// CONTRACT_ADDRESS already has real elections, so we want the app to
+// read those. Set VITE_DEMO_MODE=true to use the Supabase mock backend
+// for development / screenshots / offline testing.
+export const IS_DEMO_MODE =
+  (import.meta.env.VITE_DEMO_MODE as string | undefined)?.toLowerCase() ===
+  'true';
 
 // Contract address from deployment
-export const CONTRACT_ADDRESS = '0xc0895D39fBBD1918067d5Fa41beDAF51d36665B5';
+export const CONTRACT_ADDRESS =
+  (import.meta.env.VITE_CONTRACT_ADDRESS as string | undefined) ??
+  '0xc0895D39fBBD1918067d5Fa41beDAF51d36665B5';
 
-// Primary RPC URL - using public Polygon Amoy RPC due to Alchemy service issues
-export const ALCHEMY_URL = 'https://rpc-amoy.polygon.technology/';
+// RPC URL — prefer a private endpoint via VITE_RPC_URL (Alchemy / dRPC /
+// QuickNode), otherwise fall back to the free public Polygon Amoy RPC.
+// The public RPC is shared, slow, and rate-limited; a private one is
+// 5-10x faster.
+const PUBLIC_AMOY_RPC = 'https://rpc-amoy.polygon.technology/';
+export const ALCHEMY_URL =
+  (import.meta.env.VITE_RPC_URL as string | undefined) ?? PUBLIC_AMOY_RPC;
+const IS_PRIVATE_RPC = ALCHEMY_URL !== PUBLIC_AMOY_RPC;
+
+// Multicall3 — same address on every EVM chain including Polygon Amoy.
+// Lets us batch many view calls into a single RPC roundtrip.
+const MULTICALL3_ADDRESS = '0xcA11bde05977b3631167028862bE2a173976CA11';
+const MULTICALL3_ABI = [
+  'function aggregate3((address target, bool allowFailure, bytes callData)[] calls) external payable returns ((bool success, bytes returnData)[])',
+];
+
+// Block explorer — PolygonScan Amoy is the official Polygon testnet explorer.
+// (OKLink retired their Amoy support; links there 404.)
+export const EXPLORER_BASE_URL = 'https://amoy.polygonscan.com';
+export const explorerTxUrl = (hash: string) => `${EXPLORER_BASE_URL}/tx/${hash}`;
+export const explorerAddressUrl = (address: string) =>
+  `${EXPLORER_BASE_URL}/address/${address}`;
+export const explorerBlockUrl = (block: number | string) =>
+  `${EXPLORER_BASE_URL}/block/${block}`;
+
+// Etherscan V2 API — unified across all supported chains via `chainid`.
+// A free key at https://etherscan.io/myapikey works for Polygon Amoy.
+const ETHERSCAN_V2_API = 'https://api.etherscan.io/v2/api';
+const POLYGON_AMOY_CHAIN_ID = 80002;
+const ETHERSCAN_API_KEY = import.meta.env.VITE_ETHERSCAN_API_KEY as
+  | string
+  | undefined;
+export const HAS_ETHERSCAN_KEY = !!ETHERSCAN_API_KEY;
 
 // Types for blockchain interactions
 export interface ElectionInfo {
@@ -45,16 +88,24 @@ export interface TransactionResult {
   blockNumber?: number;
 }
 
-// Enhanced rate limiter with retry logic for Alchemy API
+// Enhanced rate limiter with retry logic.
+// Public Amoy RPC rate-limits aggressively (~10 req/s), so we throttle.
+// Private RPCs (Alchemy/dRPC) can handle hundreds of req/s, so we go full speed.
 class RateLimiter {
   private requestQueue: Array<() => void> = [];
   private isProcessing = false;
   private lastRequestTime = 0;
-  private readonly minInterval = 150; // 150ms between requests = ~6.7 requests/second
+  private readonly minInterval = IS_PRIVATE_RPC ? 0 : 150;
   private readonly maxRetries = 3;
   private readonly retryDelay = 2000; // 2 seconds between retries
 
   async executeRequest<T>(requestFn: () => Promise<T>): Promise<T> {
+    // Fast path for private RPCs: skip the serializing queue entirely so
+    // Promise.all() fan-outs actually run in parallel.
+    if (this.minInterval === 0) {
+      return this.retryRequest(requestFn);
+    }
+
     return new Promise((resolve, reject) => {
       this.requestQueue.push(async () => {
         try {
@@ -140,6 +191,9 @@ export const createElection = async (
   candidateNames: string[],
   candidateParties: string[],
 ): Promise<TransactionResult> => {
+  if (IS_DEMO_MODE) {
+    return demo.createElection(name, startTime, endTime, candidateNames, candidateParties);
+  }
   if (!window.ethereum) {
     return { success: false, error: "MetaMask is not installed!" };
   }
@@ -243,6 +297,7 @@ export const createElection = async (
 
 // Get active election ID
 export const getActiveElectionId = async (): Promise<number> => {
+  if (IS_DEMO_MODE) return demo.getActiveElectionId();
   const cacheKey = 'activeElectionId';
   const cached = cache.get<number>(cacheKey);
   if (cached !== null) return cached;
@@ -271,6 +326,7 @@ export const getActiveElectionId = async (): Promise<number> => {
 
 // Get election info with caching
 export const getElectionInfo = async (electionId: number): Promise<ElectionInfo | null> => {
+  if (IS_DEMO_MODE) return demo.getElectionInfo(electionId);
   const cacheKey = `electionInfo_${electionId}`;
   const cached = cache.get<ElectionInfo | null>(cacheKey);
   if (cached !== null) return cached;
@@ -298,8 +354,136 @@ export const getElectionInfo = async (electionId: number): Promise<ElectionInfo 
   }
 };
 
+// -----------------------------------------------------------------------
+// Multicall3 batching
+// -----------------------------------------------------------------------
+// One RPC roundtrip can fetch info + candidates + total votes for many
+// elections at once. Each election normally takes 3 separate RPC calls;
+// with multicall, N elections take 1 call total.
+
+export interface ElectionBundle {
+  info: ElectionInfo;
+  candidates: Candidate[];
+  totalVotes: number;
+}
+
+export const getElectionsBundle = async (
+  electionIds: number[]
+): Promise<Map<number, ElectionBundle>> => {
+  if (IS_DEMO_MODE) return demo.getElectionsBundle(electionIds);
+  const result = new Map<number, ElectionBundle>();
+  if (electionIds.length === 0) return result;
+
+  // Serve from cache where possible, only fetch the gaps.
+  const missing: number[] = [];
+  for (const id of electionIds) {
+    const info = cache.get<ElectionInfo>(`electionInfo_${id}`);
+    const candidates = cache.get<Candidate[]>(`candidates_${id}`);
+    const totalVotes = cache.get<number>(`totalVotes_${id}`);
+    if (info && candidates && totalVotes !== null) {
+      result.set(id, { info, candidates, totalVotes });
+    } else {
+      missing.push(id);
+    }
+  }
+  if (missing.length === 0) return result;
+
+  const provider = getProvider();
+  const votingIface = new ethers.Interface(VotingSystemABI.abi);
+  const multicall = new ethers.Contract(
+    MULTICALL3_ADDRESS,
+    MULTICALL3_ABI,
+    provider
+  );
+
+  // 3 calls per election: getElectionInfo, getAllCandidates, getTotalVotes
+  const calls = missing.flatMap((id) => [
+    {
+      target: CONTRACT_ADDRESS,
+      allowFailure: true,
+      callData: votingIface.encodeFunctionData('getElectionInfo', [id]),
+    },
+    {
+      target: CONTRACT_ADDRESS,
+      allowFailure: true,
+      callData: votingIface.encodeFunctionData('getAllCandidates', [id]),
+    },
+    {
+      target: CONTRACT_ADDRESS,
+      allowFailure: true,
+      callData: votingIface.encodeFunctionData('getTotalVotes', [id]),
+    },
+  ]);
+
+  try {
+    const returned: Array<{ success: boolean; returnData: string }> =
+      await rateLimiter.executeRequest(() =>
+        multicall.aggregate3.staticCall(calls)
+      );
+
+    missing.forEach((id, i) => {
+      const infoRes = returned[i * 3];
+      const candRes = returned[i * 3 + 1];
+      const totalRes = returned[i * 3 + 2];
+
+      if (!infoRes.success || !candRes.success || !totalRes.success) return;
+
+      const decodedInfo = votingIface.decodeFunctionResult(
+        'getElectionInfo',
+        infoRes.returnData
+      );
+      const decodedCand = votingIface.decodeFunctionResult(
+        'getAllCandidates',
+        candRes.returnData
+      );
+      const decodedTotal = votingIface.decodeFunctionResult(
+        'getTotalVotes',
+        totalRes.returnData
+      );
+
+      const info: ElectionInfo = {
+        name: decodedInfo[0],
+        startTime: new Date(Number(decodedInfo[1]) * 1000),
+        endTime: new Date(Number(decodedInfo[2]) * 1000),
+        active: decodedInfo[3],
+        candidateCount: Number(decodedInfo[4]),
+      };
+      const candidates: Candidate[] = (decodedCand[0] as string[]).map(
+        (name, idx) => ({
+          name,
+          party: decodedCand[1][idx],
+          votes: Number(decodedCand[2][idx]),
+          index: idx,
+        })
+      );
+      const totalVotes = Number(decodedTotal[0]);
+
+      cache.set(`electionInfo_${id}`, info, 120000);
+      cache.set(`candidates_${id}`, candidates, 60000);
+      cache.set(`totalVotes_${id}`, totalVotes, 60000);
+      result.set(id, { info, candidates, totalVotes });
+    });
+  } catch (error) {
+    console.error('Multicall failed, falling back to per-election calls:', error);
+    // Fallback: hit the individual cached functions in parallel.
+    await Promise.all(
+      missing.map(async (id) => {
+        const [info, candidates, totalVotes] = await Promise.all([
+          getElectionInfo(id),
+          getAllCandidates(id),
+          getTotalVotes(id),
+        ]);
+        if (info) result.set(id, { info, candidates, totalVotes });
+      })
+    );
+  }
+
+  return result;
+};
+
 // Get all candidates for an election with caching
 export const getAllCandidates = async (electionId: number): Promise<Candidate[]> => {
+  if (IS_DEMO_MODE) return demo.getAllCandidates(electionId);
   const cacheKey = `candidates_${electionId}`;
   const cached = cache.get<Candidate[]>(cacheKey);
   if (cached !== null) return cached;
@@ -329,6 +513,7 @@ export const getAllCandidates = async (electionId: number): Promise<Candidate[]>
 
 // Get total votes in an election with caching
 export const getTotalVotes = async (electionId: number): Promise<number> => {
+  if (IS_DEMO_MODE) return demo.getTotalVotes(electionId);
   const cacheKey = `totalVotes_${electionId}`;
   const cached = cache.get<number>(cacheKey);
   if (cached !== null) return cached;
@@ -354,6 +539,13 @@ export const castVote = async (
   candidateIndex: number,
   voterNINHash: string
 ): Promise<TransactionResult> => {
+  if (IS_DEMO_MODE) {
+    // In demo mode, the voter address is whatever the mock wallet stored
+    // in localStorage — see use-metamask.tsx demo branch.
+    const voterAddress =
+      localStorage.getItem('demo_wallet') ?? '0xDemoVoter';
+    return demo.castVote(electionId, candidateIndex, voterNINHash, voterAddress);
+  }
   if (!window.ethereum) {
     return { success: false, error: "MetaMask is not installed!" };
   }
@@ -441,9 +633,8 @@ export const castVote = async (
       const receipt = await tx.wait();
       console.log("Transaction confirmed:", receipt);
 
-      // After successful vote, open the transaction in OKLink explorer
-      const explorerUrl = `https://www.oklink.com/amoy/tx/${receipt.hash}`;
-      window.open(explorerUrl, '_blank');
+      // After successful vote, open the transaction on PolygonScan Amoy
+      window.open(explorerTxUrl(receipt.hash), '_blank');
 
       return {
         success: true,
@@ -504,6 +695,7 @@ export const hashNIN = async (nin: string): Promise<string> => {
 
 // Check if address is admin
 export const isAdmin = async (address: string): Promise<boolean> => {
+  if (IS_DEMO_MODE) return demo.isAdmin(address);
   try {
     const contract = getReadOnlyContract();
     const admin = await rateLimiter.executeRequest(async () => {
@@ -524,148 +716,318 @@ export interface Election {
   endTime: string;
 }
 
-// Get transactions for our contract with caching and optimization
+// Fetch real on-chain contract transactions.
+//
+// PRIMARY: Etherscan V2 API. Indexed, full history, one call, fast.
+//   Needs a free API key in VITE_ETHERSCAN_API_KEY.
+//
+// FALLBACK: eth_getLogs walking. Used only when no API key is set. We
+// walk backwards from `latestBlock` in 10k-block chunks, since public
+// RPCs cap eth_getLogs ranges. Slow and prone to silent failures under
+// rate-limiting — that's why Etherscan is preferred.
+const BLOCK_WINDOW = 10_000;
+const MAX_LOOKBACK_BLOCKS = 500_000;
+
+// Reconstruct a transaction-like feed from contract STATE.
+//
+// The contract emits no events, so eth_getLogs can't find anything and
+// Alchemy's getAssetTransfers ignores 0-value contract calls. BUT we can
+// read state directly: getActiveElectionId gives us the count, then per
+// election getElectionInfo + getAllCandidates + getTotalVotes tells us
+// names, dates, candidates, and vote counts. From that we synthesise
+// one createElection entry per election + N castVote entries per election.
+//
+// Tradeoff: tx hashes are synthetic (prefixed `0xstate:`), so they don't
+// link to PolygonScan. The Etherscan path (if a key is set) wins for that.
+async function buildTransactionsFromState(
+  pageSize: number
+): Promise<Transaction[]> {
+  const nextId = await getActiveElectionId();
+  if (nextId <= 1) return [];
+
+  const ids = Array.from({ length: nextId - 1 }, (_, i) => nextId - 1 - i);
+  const bundles = await getElectionsBundle(ids);
+
+  let adminAddress = '0x0000000000000000000000000000000000000000';
+  try {
+    const contract = getReadOnlyContract();
+    const a = await rateLimiter.executeRequest(() => contract.admin());
+    if (typeof a === 'string') adminAddress = a;
+  } catch (err) {
+    console.warn('[blockchain] admin() lookup failed; using fallback', err);
+  }
+
+  const txs: Transaction[] = [];
+
+  // Higher election ID → higher synthetic block so newest sorts first.
+  // Within an election, the createElection event is at the base block
+  // and votes are spaced after it.
+  const BASE = 1_000_000;
+  const SPACING = 1_000;
+
+  for (const id of ids) {
+    const b = bundles.get(id);
+    if (!b?.info?.name) continue;
+
+    const baseBlock = BASE + id * SPACING;
+
+    // createElection — timestamp ~1h before election start (best guess)
+    txs.push({
+      hash: `0xstate:create:${id}`,
+      timestamp: new Date(b.info.startTime.getTime() - 3_600_000),
+      from: adminAddress,
+      to: CONTRACT_ADDRESS,
+      method: 'createElection',
+      value: '0',
+      blockNumber: baseBlock,
+      status: 'Confirmed',
+    });
+
+    if (b.totalVotes === 0) continue;
+
+    // castVote — spread N votes evenly between start and end
+    const start = b.info.startTime.getTime();
+    const end = b.info.endTime.getTime();
+    const duration = Math.max(0, end - start);
+    for (let i = 0; i < b.totalVotes; i++) {
+      const ratio = b.totalVotes === 1 ? 0.5 : i / (b.totalVotes - 1);
+      const ts = new Date(start + ratio * duration);
+      txs.push({
+        hash: `0xstate:vote:${id}:${i}`,
+        timestamp: ts,
+        from: '0xvoter',
+        to: CONTRACT_ADDRESS,
+        method: 'castVote',
+        value: '0',
+        blockNumber: baseBlock + i + 1,
+        status: 'Confirmed',
+      });
+    }
+  }
+
+  // Newest first by synthetic block number
+  txs.sort((a, b) => b.blockNumber - a.blockNumber);
+  return txs.slice(0, pageSize);
+}
+
+export function isSyntheticTxHash(hash: string): boolean {
+  return hash.startsWith('0xstate:');
+}
+
+async function fetchTransactionsViaEtherscan(
+  apiKey: string,
+  pageSize: number
+): Promise<Transaction[]> {
+  const url = new URL(ETHERSCAN_V2_API);
+  url.searchParams.set('chainid', String(POLYGON_AMOY_CHAIN_ID));
+  url.searchParams.set('module', 'account');
+  url.searchParams.set('action', 'txlist');
+  url.searchParams.set('address', CONTRACT_ADDRESS);
+  url.searchParams.set('startblock', '0');
+  url.searchParams.set('endblock', '99999999');
+  url.searchParams.set('page', '1');
+  url.searchParams.set('offset', String(Math.min(pageSize, 10_000)));
+  url.searchParams.set('sort', 'desc');
+  url.searchParams.set('apikey', apiKey);
+
+  const res = await fetch(url.toString());
+  if (!res.ok) throw new Error(`Etherscan HTTP ${res.status}`);
+  const data = await res.json();
+
+  if (data.status === '0') {
+    if (data.message === 'No transactions found') return [];
+    throw new Error(`Etherscan: ${data.message ?? 'unknown error'}`);
+  }
+  if (data.status !== '1' || !Array.isArray(data.result)) {
+    throw new Error('Etherscan: unexpected response shape');
+  }
+
+  // Decode each tx's method by parsing its calldata against our ABI.
+  const iface = new ethers.Interface(VotingSystemABI.abi as ethers.InterfaceAbi);
+  return data.result.map((tx: Record<string, string>) => {
+    let method = 'unknown';
+    try {
+      if (tx.input && tx.input !== '0x') {
+        const parsed = iface.parseTransaction({ data: tx.input });
+        if (parsed?.name) method = parsed.name;
+      }
+    } catch {
+      // Unknown selector — leave as 'unknown'.
+    }
+    return {
+      hash: tx.hash,
+      timestamp: new Date(Number(tx.timeStamp) * 1000),
+      from: tx.from,
+      to: tx.to,
+      method,
+      value: tx.value ?? '0',
+      blockNumber: Number(tx.blockNumber),
+      status: tx.txreceipt_status === '1' ? 'Confirmed' : 'Failed',
+    } as Transaction;
+  });
+}
+
 export const getContractTransactions = async (
   startBlock?: number,
-  pageSize: number = 10
+  pageSize: number = 25
 ): Promise<PaginatedTransactions> => {
-  const cacheKey = `transactions_${startBlock || 'latest'}_${pageSize}`;
+  if (IS_DEMO_MODE) return demo.getContractTransactions(startBlock, pageSize);
+  const cacheKey = `transactions_${startBlock ?? 'latest'}_${pageSize}`;
   const cached = cache.get<PaginatedTransactions>(cacheKey);
   if (cached !== null) return cached;
 
+  // Preferred: Etherscan when a key is configured — real tx hashes that
+  // link out to PolygonScan.
+  if (ETHERSCAN_API_KEY) {
+    try {
+      const transactions = await fetchTransactionsViaEtherscan(
+        ETHERSCAN_API_KEY,
+        pageSize
+      );
+      if (transactions.length > 0) {
+        const result: PaginatedTransactions = {
+          transactions,
+          hasMore: transactions.length === pageSize,
+          nextBlock: undefined,
+        };
+        cache.set(cacheKey, result, 120_000);
+        return result;
+      }
+    } catch (err) {
+      console.error(
+        '[blockchain] Etherscan fetch failed, falling back to state:',
+        err
+      );
+    }
+  }
+
+  // Default path: reconstruct from contract state — exactly how
+  // Previous Elections works. Doesn't need any external API key, and
+  // since the contract emits no events this is the only thing that
+  // actually returns rows for this contract.
   try {
-    console.log("Starting getContractTransactions with startBlock:", startBlock);
+    const transactions = await buildTransactionsFromState(pageSize);
+    const result: PaginatedTransactions = {
+      transactions,
+      hasMore: false,
+      nextBlock: undefined,
+    };
+    cache.set(cacheKey, result, 60_000);
+    return result;
+  } catch (err) {
+    console.error('[blockchain] State reconstruction failed:', err);
+  }
+
+  try {
     const provider = getProvider();
-    // Use type assertion to specify the contract ABI is a valid interface
     const contract = new ethers.Contract(
-      CONTRACT_ADDRESS, 
-      VotingSystemABI.abi as ethers.InterfaceAbi, 
+      CONTRACT_ADDRESS,
+      VotingSystemABI.abi as ethers.InterfaceAbi,
       provider
     );
-    
-    // Get latest block
-    const latestBlock = await provider.getBlockNumber();
-    console.log("Latest block from provider:", latestBlock);
-    
-    // Use a more conservative block range to avoid data availability issues
-    const blockWindow = 5000; // Reduced from 1000 to be more conservative
-    const fromBlock = startBlock !== undefined 
-      ? startBlock 
-      : Math.max(0, latestBlock - blockWindow);
-    
-    // For current block range, don't go backwards too far
-    const endBlock = startBlock !== undefined 
-      ? Math.max(0, startBlock - blockWindow)
-      : Math.max(0, latestBlock - blockWindow);
-    
-    console.log(`Scanning from block ${endBlock} to ${fromBlock}`);
-    
-    // Prepare to collect transactions
-    const transactions: Transaction[] = [];
-    
-    // Method signature to method name mapping
-    const methodMap: { [key: string]: string } = {
-      "0x9112c1eb": "createElection",
-      "0x0121b93f": "castVote",
-      "0xa3ec138d": "changeAdmin",
-      "0x8da5cb5b": "owner",
-      "0x8456cb59": "pause",
-      "0x3f4ba83a": "unpause",
-      "0x5c975abb": "paused"
-    };
-    
-    // Fetch events from the contract (much more reliable than scanning all blocks)
-    console.log("Querying contract events...");
-    
-    // Get CreateElection events
-    try {
-      const createFilter = contract.filters.ElectionCreated();
-      const createEvents = await contract.queryFilter(createFilter, endBlock, fromBlock);
-      console.log(`Found ${createEvents.length} ElectionCreated events`);
-      
-      // Process each event
-      for (const event of createEvents) {
-        if (transactions.length >= pageSize) break;
-        
-        const tx = await provider.getTransaction(event.transactionHash);
-        const receipt = await provider.getTransactionReceipt(event.transactionHash);
-        const block = await provider.getBlock(event.blockNumber);
-        
-        if (tx && receipt && block) {
-          const blockTimestamp = block.timestamp ? Number(block.timestamp) * 1000 : Date.now();
-          
-          transactions.push({
-            hash: event.transactionHash,
-            timestamp: new Date(blockTimestamp),
-            from: tx.from || "",
-            to: CONTRACT_ADDRESS,
-            method: "createElection",
-            value: tx.value.toString(),
-            blockNumber: event.blockNumber,
-            status: receipt.status === 1 ? "Confirmed" : "Failed"
-          });
-        }
-      }
-    } catch (error) {
-      console.error("Error getting ElectionCreated events:", error);
-    }
-    
-    // Get Vote events if we still have space
-    if (transactions.length < pageSize) {
-      try {
-        const voteFilter = contract.filters.VoteCast();
-        const voteEvents = await contract.queryFilter(voteFilter, endBlock, fromBlock);
-        console.log(`Found ${voteEvents.length} VoteCast events`);
-        
-        // Process each event
-        for (const event of voteEvents) {
-          if (transactions.length >= pageSize) break;
-          
-          const tx = await provider.getTransaction(event.transactionHash);
-          const receipt = await provider.getTransactionReceipt(event.transactionHash);
-          const block = await provider.getBlock(event.blockNumber);
-          
-          if (tx && receipt && block) {
-            const blockTimestamp = block.timestamp ? Number(block.timestamp) * 1000 : Date.now();
-            
-            transactions.push({
-              hash: event.transactionHash,
-              timestamp: new Date(blockTimestamp),
-              from: tx.from || "",
-              to: CONTRACT_ADDRESS,
-              method: "castVote",
-              value: "0",
-              blockNumber: event.blockNumber,
-              status: receipt.status === 1 ? "Confirmed" : "Failed"
-            });
-          }
-        }
-      } catch (error) {
-        console.error("Error getting VoteCast events:", error);
-      }
-    }
-    
-    // Sort transactions by block number (newest first)
-    transactions.sort((a, b) => b.blockNumber - a.blockNumber);
-    
-    // Determine if there are more transactions to load
-    const oldestTx = transactions.length > 0 ? transactions[transactions.length - 1] : null;
-    const hasMore = transactions.length > 0 && endBlock > 0;
-    const nextBlock = hasMore && oldestTx ? oldestTx.blockNumber - 1 : undefined;
 
-    const result = {
-      transactions,
-      hasMore,
-      nextBlock
+    const latestBlock = await rateLimiter.executeRequest(() =>
+      provider.getBlockNumber()
+    );
+    const topBlock = startBlock !== undefined ? startBlock : latestBlock;
+    const floorBlock = Math.max(0, topBlock - MAX_LOOKBACK_BLOCKS);
+
+    type RawEvent = { event: ethers.EventLog | ethers.Log; method: string };
+    const allEvents: RawEvent[] = [];
+
+    // Walk back in 10k-block chunks until we have enough events or we
+    // hit the lookback floor.
+    let toBlock = topBlock;
+    let scannedFloor = topBlock;
+    while (allEvents.length < pageSize && toBlock > floorBlock) {
+      const fromBlock = Math.max(floorBlock, toBlock - BLOCK_WINDOW);
+      scannedFloor = fromBlock;
+
+      const [createEvents, voteEvents] = await Promise.all([
+        rateLimiter
+          .executeRequest(() =>
+            contract.queryFilter(contract.filters.ElectionCreated(), fromBlock, toBlock)
+          )
+          .catch((e) => {
+            console.error('ElectionCreated query failed:', e);
+            return [] as ethers.EventLog[];
+          }),
+        rateLimiter
+          .executeRequest(() =>
+            contract.queryFilter(contract.filters.VoteCast(), fromBlock, toBlock)
+          )
+          .catch((e) => {
+            console.error('VoteCast query failed:', e);
+            return [] as ethers.EventLog[];
+          }),
+      ]);
+
+      for (const event of createEvents) {
+        allEvents.push({ event, method: 'createElection' });
+      }
+      for (const event of voteEvents) {
+        allEvents.push({ event, method: 'castVote' });
+      }
+
+      if (fromBlock === 0) break;
+      toBlock = fromBlock - 1;
+    }
+
+    const sorted = allEvents
+      .sort((a, b) => b.event.blockNumber - a.event.blockNumber)
+      .slice(0, pageSize);
+
+    // Resolve receipts + blocks in parallel. Cache block lookups since
+    // multiple events often share a block.
+    const blockCache = new Map<number, Promise<ethers.Block | null>>();
+    const getBlock = (n: number) => {
+      if (!blockCache.has(n)) {
+        blockCache.set(
+          n,
+          rateLimiter.executeRequest(() => provider.getBlock(n))
+        );
+      }
+      return blockCache.get(n)!;
     };
-    
-    // Cache the result for 2 minutes
-    cache.set(cacheKey, result, 120000);
+
+    const transactions = await Promise.all(
+      sorted.map(async ({ event, method }) => {
+        const [receipt, block] = await Promise.all([
+          rateLimiter.executeRequest(() =>
+            provider.getTransactionReceipt(event.transactionHash)
+          ),
+          getBlock(event.blockNumber),
+        ]);
+
+        const blockTimestamp = block?.timestamp
+          ? Number(block.timestamp) * 1000
+          : Date.now();
+
+        return {
+          hash: event.transactionHash,
+          timestamp: new Date(blockTimestamp),
+          from: receipt?.from ?? '',
+          to: CONTRACT_ADDRESS,
+          method,
+          value: '0',
+          blockNumber: event.blockNumber,
+          status: receipt?.status === 1 ? 'Confirmed' : 'Failed',
+        } as Transaction;
+      })
+    );
+
+    transactions.sort((a, b) => b.blockNumber - a.blockNumber);
+
+    const hasMore = scannedFloor > 0;
+    const nextBlock = hasMore ? scannedFloor - 1 : undefined;
+
+    const result: PaginatedTransactions = { transactions, hasMore, nextBlock };
+    cache.set(cacheKey, result, 120_000);
     return result;
   } catch (error) {
-    console.error("Error fetching contract transactions:", error);
-    const errorResult = { transactions: [], hasMore: false };
-    cache.set(cacheKey, errorResult, 30000); // Cache error for 30 seconds
+    console.error('Error fetching contract transactions:', error);
+    const errorResult: PaginatedTransactions = { transactions: [], hasMore: false };
+    cache.set(cacheKey, errorResult, 30_000);
     return errorResult;
   }
 };

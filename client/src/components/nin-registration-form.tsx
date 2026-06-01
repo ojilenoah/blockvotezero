@@ -141,20 +141,20 @@ export function NinRegistrationForm({ onSuccess }: NinRegistrationFormProps) {
           </div>
         ) : isRegistrationLocked ? (
           <div className="space-y-4">
-            <Alert className="bg-red-50 border-red-200">
+            <Alert variant="destructive">
               <AlertTitle className="flex items-center gap-2">
-                <Lock className="h-5 w-5 text-red-500" />
+                <Lock className="h-5 w-5" />
                 Registration Closed
               </AlertTitle>
               <AlertDescription>
                 <p className="mb-2">NIN registration is currently locked.</p>
-                <p className="text-sm text-red-700">
-                  During active elections, the registration system is locked to ensure voting integrity. 
+                <p className="text-sm">
+                  During active elections, the registration system is locked to ensure voting integrity.
                   Please check back later when the election has concluded.
                 </p>
                 {existingNIN && (
-                  <div className="mt-4 p-3 bg-blue-50 rounded-md border border-blue-100">
-                    <p className="text-sm font-medium text-blue-800">Your existing registration remains valid:</p>
+                  <div className="mt-4 border-2 border-primary bg-primary/10 p-3">
+                    <p className="text-sm font-bold text-foreground">Your existing registration remains valid:</p>
                     <div className="mt-1 font-mono text-sm">{existingNIN.nin}</div>
                   </div>
                 )}
@@ -163,7 +163,7 @@ export function NinRegistrationForm({ onSuccess }: NinRegistrationFormProps) {
           </div>
         ) : !isConnected ? (
           <div className="space-y-4">
-            <Alert className="mb-4 bg-yellow-50 border-yellow-200">
+            <Alert variant="warning" className="mb-4">
               <AlertTitle>Wallet Connection Required</AlertTitle>
               <AlertDescription>
                 Connect your wallet to register your NIN. This is required for verification purposes.
@@ -189,26 +189,26 @@ export function NinRegistrationForm({ onSuccess }: NinRegistrationFormProps) {
           </div>
         ) : existingNIN ? (
           <div className="space-y-4">
-            <Alert className="bg-blue-50 border-blue-200">
+            <Alert variant="info">
               <AlertTitle>NIN Already Registered</AlertTitle>
               <AlertDescription>
                 <p>Your wallet address already has a registered NIN:</p>
-                <div className="mt-2 font-mono font-medium">{existingNIN.nin}</div>
+                <div className="mt-2 font-mono font-medium text-foreground">{existingNIN.nin}</div>
                 <div className="mt-2">
-                  <span className="font-medium">Status: </span>
+                  <span className="font-medium text-foreground">Status: </span>
                   {existingNIN.status === 'Y' ? (
-                    <span className="text-green-600 font-medium flex items-center">
+                    <span className="text-success font-medium inline-flex items-center">
                       <CheckCircle className="h-4 w-4 mr-1" /> Voted
                     </span>
                   ) : (
-                    <span className="text-blue-600 font-medium">Registered</span>
+                    <span className="text-primary font-medium">Registered</span>
                   )}
                 </div>
               </AlertDescription>
             </Alert>
           </div>
         ) : success ? (
-          <Alert className="mb-4 bg-green-50 border-green-200">
+          <Alert variant="success" className="mb-4">
             <AlertTitle>Registration Successful</AlertTitle>
             <AlertDescription className="font-medium">
               Your NIN has been successfully submitted and registered. You can now vote in the elections.

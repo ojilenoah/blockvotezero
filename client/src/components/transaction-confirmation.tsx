@@ -36,10 +36,11 @@ export function TransactionConfirmation({
         return `https://sepolia.etherscan.io/tx/${hash}`;
       case "0x89": // Polygon
         return `https://polygonscan.com/tx/${hash}`;
-      case "0xe9": // Amoy Testnet
-        return `https://www.oklink.com/amoy/tx/${hash}`;
+      case "0x13882": // Polygon Amoy (modern hex)
+      case "0xe9":    // Polygon Amoy (legacy hex)
+        return `https://amoy.polygonscan.com/tx/${hash}`;
       default:
-        return `https://www.oklink.com/amoy/tx/${hash}`; // Default to Amoy testnet
+        return `https://amoy.polygonscan.com/tx/${hash}`; // Default to Amoy testnet
     }
   };
 

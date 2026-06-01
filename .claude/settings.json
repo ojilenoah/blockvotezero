@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs grep -l \"app\\\\.get\\\\|app\\\\.post\\\\|router\\\\.get\\\\|router\\\\.post\")",
+      "PowerShell(Get-NetTCPConnection -LocalPort 5000 -ErrorAction SilentlyContinue | Select-Object LocalAddress, LocalPort, State, OwningProcess | ForEach-Object { $proc = Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue; [PSCustomObject]@{ LocalAddress = $_.LocalAddress; Port = $_.LocalPort; State = $_.State; PID = $_.OwningProcess; ProcessName = $proc.ProcessName; StartTime = $proc.StartTime } } | Format-Table -AutoSize)",
+      "Bash(curl -s \"https://api-amoy.polygonscan.com/api?module=account&action=txlist&address=0xc0895D39fBBD1918067d5Fa41beDAF51d36665B5&startblock=0&endblock=99999999&page=1&offset=5&sort=desc\")",
+      "Bash(curl -s \"https://api.etherscan.io/v2/api?chainid=80002&module=account&action=txlist&address=0xc0895D39fBBD1918067d5Fa41beDAF51d36665B5&startblock=0&endblock=99999999&page=1&offset=5&sort=desc\")",
+      "Bash(curl -s -X POST -H \"Content-Type: application/json\" -d '{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":1}' \"https://polygon-amoy.g.alchemy.com/v2/xLeFDCZG65tLX5wTyfYyU\")",
+      "Bash(curl -s -X POST -H \"Content-Type: application/json\" -d '{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":1}' \"https://polygon-amoy.g.alchemy.com/v2/E822ZzOp7UFQy6Zt82uF4hzcdklL-qoe\")",
+      "Bash(curl -s -X POST -H \"Content-Type: application/json\" -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"eth_getLogs\",\"params\":[{\"address\":\"0xc0895D39fBBD1918067d5Fa41beDAF51d36665B5\",\"fromBlock\":\"earliest\",\"toBlock\":\"latest\"}]}' \"https://polygon-amoy.g.alchemy.com/v2/xLeFDCZG65tLX5wTyfYyU\")",
+      "Bash(curl -s -X POST -H \"Content-Type: application/json\" -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"alchemy_getAssetTransfers\",\"params\":[{\"toAddress\":\"0xc0895D39fBBD1918067d5Fa41beDAF51d36665B5\",\"category\":[\"external\"],\"order\":\"desc\",\"withMetadata\":true,\"maxCount\":\"0x5\"}]}' \"https://polygon-amoy.g.alchemy.com/v2/xLeFDCZG65tLX5wTyfYyU\")",
+      "Bash(curl -s -X POST -H \"Content-Type: application/json\" -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"alchemy_getAssetTransfers\",\"params\":[{\"toAddress\":\"0xc0895D39fBBD1918067d5Fa41beDAF51d36665B5\",\"fromBlock\":\"0x0\",\"category\":[\"external\",\"internal\",\"erc20\",\"erc721\",\"erc1155\"],\"order\":\"desc\",\"withMetadata\":true,\"maxCount\":\"0xa\"}]}' \"https://polygon-amoy.g.alchemy.com/v2/xLeFDCZG65tLX5wTyfYyU\")",
+      "Bash(curl -s -X POST -H \"Content-Type: application/json\" -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"eth_getCode\",\"params\":[\"0xc0895D39fBBD1918067d5Fa41beDAF51d36665B5\",\"latest\"]}' \"https://polygon-amoy.g.alchemy.com/v2/xLeFDCZG65tLX5wTyfYyU\")",
+      "Bash(curl -s \"https://amoy.polygonscan.com/address/0xc0895D39fBBD1918067d5Fa41beDAF51d36665B5\")",
+      "Bash(python -c \"import sys, json; r=json.load\\(sys.stdin\\); print\\('code length:', len\\(r['result']\\)\\)\")",
+      "Bash(curl -s -X POST -H \"Content-Type: application/json\" -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"eth_getTransactionCount\",\"params\":[\"0xc0895D39fBBD1918067d5Fa41beDAF51d36665B5\",\"latest\"]}' \"https://polygon-amoy.g.alchemy.com/v2/xLeFDCZG65tLX5wTyfYyU\")",
+      "Bash(curl -s -X POST -H \"Content-Type: application/json\" -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"alchemy_getAssetTransfers\",\"params\":[{\"fromAddress\":\"0xc0895D39fBBD1918067d5Fa41beDAF51d36665B5\",\"category\":[\"external\"],\"maxCount\":\"0x5\"}]}' \"https://polygon-amoy.g.alchemy.com/v2/xLeFDCZG65tLX5wTyfYyU\")",
+      "Bash(node -e ' *)",
+      "Bash(curl -s -X POST -H \"Content-Type: application/json\" -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"eth_call\",\"params\":[{\"to\":\"0xc0895D39fBBD1918067d5Fa41beDAF51d36665B5\",\"data\":\"0x98ecf2a0\"},\"latest\"]}' \"https://polygon-amoy.g.alchemy.com/v2/xLeFDCZG65tLX5wTyfYyU\")",
+      "Bash(curl -s -X POST -H \"Content-Type: application/json\" -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"eth_call\",\"params\":[{\"to\":\"0xc0895D39fBBD1918067d5Fa41beDAF51d36665B5\",\"data\":\"0xf851a440\"},\"latest\"]}' \"https://polygon-amoy.g.alchemy.com/v2/xLeFDCZG65tLX5wTyfYyU\")",
+      "Bash(curl -s -X POST -H \"Content-Type: application/json\" -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"eth_call\",\"params\":[{\"to\":\"0xc0895D39fBBD1918067d5Fa41beDAF51d36665B5\",\"data\":\"0xa68a4a4d0000000000000000000000000000000000000000000000000000000000000001\"},\"latest\"]}' \"https://polygon-amoy.g.alchemy.com/v2/xLeFDCZG65tLX5wTyfYyU\")",
+      "Bash(git rm *)",
+      "Bash(npm run *)"
+    ]
+  }
+}

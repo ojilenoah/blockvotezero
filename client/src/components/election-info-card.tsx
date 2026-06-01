@@ -1,284 +1,273 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import {
   getActiveElectionId,
-  getElectionInfo,
-  getAllCandidates,
-  getTotalVotes,
+  getElectionsBundle,
 } from "@/utils/blockchain";
 import { candidateColors } from "@/data/mock-data";
+import { ArrowRight, BarChart3, Table2, Calendar, Clock, Users } from "lucide-react";
+import { AnimatedBar, NumberRoll, motion, fadeUp } from "@/lib/motion";
+
+interface CandidateRow {
+  name: string;
+  party: string;
+  votes: number;
+  percentage: number;
+}
+
+interface ActiveElectionView {
+  id: number;
+  name: string;
+  startTime: Date;
+  endTime: Date;
+  candidates: CandidateRow[];
+  totalVotes: number;
+}
 
 export function ElectionInfoCard() {
-  const [viewMode, setViewMode] = useState<'chart' | 'table'>('chart');
+  const [viewMode, setViewMode] = useState<"chart" | "table">("chart");
 
-  // Query for active election data
-  const { data: electionData, isLoading } = useQuery({
-    queryKey: ['activeElection'],
+  const { data: electionData, isLoading } = useQuery<ActiveElectionView | null>({
+    queryKey: ["activeElection"],
     queryFn: async () => {
-      try {
-        // Get current election ID (this will be the next ID to be used)
-        const nextId = await getActiveElectionId();
-        console.log("[ElectionInfoCard] Next election ID:", nextId);
+      const nextId = await getActiveElectionId();
+      if (!nextId) return null;
 
-        if (!nextId) {
-          console.log("[ElectionInfoCard] No election ID found");
-          return null;
+      const ids = Array.from({ length: nextId - 1 }, (_, i) => nextId - 1 - i);
+      const bundles = await getElectionsBundle(ids);
+
+      for (const id of ids) {
+        const b = bundles.get(id);
+        if (!b?.info?.name) continue;
+        const now = new Date();
+        const { startTime, endTime, active } = b.info;
+        if (active && now >= startTime && now <= endTime) {
+          return {
+            id,
+            name: b.info.name,
+            startTime,
+            endTime,
+            totalVotes: b.totalVotes,
+            candidates: b.candidates.map((c) => ({
+              name: c.name,
+              party: c.party,
+              votes: c.votes,
+              percentage:
+                b.totalVotes > 0 ? Math.round((c.votes / b.totalVotes) * 100) : 0,
+            })),
+          };
         }
-
-        // Look backwards from current ID to find the most recent valid election
-        for (let id = nextId - 1; id >= 1; id--) {
-          try {
-            const electionInfo = await getElectionInfo(id);
-            console.log(`[ElectionInfoCard] Checking election ${id}:`, electionInfo);
-
-            if (electionInfo?.name) {
-              // Found a valid election, get candidates and votes
-              const candidates = await getAllCandidates(id);
-              console.log("[ElectionInfoCard] Candidates:", candidates);
-
-              const totalVotes = await getTotalVotes(id);
-              console.log("[ElectionInfoCard] Total votes:", totalVotes);
-
-              // Calculate if election is active based on time
-              const now = new Date();
-              const startTime = new Date(electionInfo.startTime);
-              const endTime = new Date(electionInfo.endTime);
-              const isActive = now >= startTime && now <= endTime;
-
-              console.log("[ElectionInfoCard] Time check:", {
-                now: now.toISOString(),
-                startTime: startTime.toISOString(),
-                endTime: endTime.toISOString(),
-                isActive,
-                contractActive: electionInfo.active
-              });
-
-              // Only return if the election is active
-              if (isActive && electionInfo.active) {
-                return {
-                  id,
-                  name: electionInfo.name,
-                  startTime,
-                  endTime,
-                  candidates: candidates.map(candidate => ({
-                    ...candidate,
-                    percentage: totalVotes > 0 ? Math.round((candidate.votes / totalVotes) * 100) : 0
-                  })),
-                  totalVotes
-                };
-              }
-            }
-          } catch (error) {
-            console.error(`[ElectionInfoCard] Error checking election ${id}:`, error);
-            continue;
-          }
-        }
-
-        return null;
-      } catch (error) {
-        console.error("[ElectionInfoCard] Error fetching election data:", error);
-        return null;
       }
+      return null;
     },
-    staleTime: 30000,
-    refetchInterval: 60000
+    staleTime: 30_000,
+    refetchInterval: 60_000,
   });
 
   if (isLoading) {
     return (
-      <Card className="p-6">
-        <div className="h-48 flex items-center justify-center">
-          <p className="text-gray-500">Loading election data...</p>
+      <div className="b-card flex h-72 items-center justify-center">
+        <div className="text-center">
+          <div className="b-label">// status</div>
+          <p className="mt-2 font-display text-lg font-bold">Syncing chain data…</p>
         </div>
-      </Card>
+      </div>
     );
   }
 
   if (!electionData) {
     return (
-      <Card className="p-6">
-        <div className="text-center">
-          <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg 
-              className="w-8 h-8 text-primary" 
-              fill="none" 
-              viewBox="0 0 24 24" 
-              stroke="currentColor"
-            >
-              <path 
-                strokeLinecap="round" 
-                strokeLinejoin="round" 
-                strokeWidth={2} 
-                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" 
-              />
-            </svg>
+      <div className="b-card">
+        <div className="border-b-2 border-border px-6 py-4">
+          <span className="b-label">// no active election</span>
+        </div>
+        <div className="px-6 py-10 text-center">
+          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center border-2 border-border bg-secondary">
+            <Calendar className="h-7 w-7" strokeWidth={2} />
           </div>
-          <h3 className="text-xl font-medium text-gray-900">No Active Election</h3>
-          <p className="mt-2 text-sm text-gray-500">There are currently no active elections. Check back later for upcoming elections.</p>
-          
-          <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
+          <h3 className="b-display text-2xl">No Active Election</h3>
+          <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
+            The protocol is idle. Register now so you're ready when the next vote opens.
+          </p>
+          <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link href="/register">
-              <Button className="w-full sm:w-auto" variant="default">
-                Register to Vote
-              </Button>
+              <Button>Register to Vote <ArrowRight className="ml-1" /></Button>
             </Link>
             <Link href="/explorer">
-              <Button className="w-full sm:w-auto" variant="outline">
-                View Past Elections
-              </Button>
+              <Button variant="outline">View Past Elections</Button>
             </Link>
           </div>
         </div>
-      </Card>
+      </div>
     );
   }
 
-  const timeRemaining = electionData.endTime.getTime() - Date.now();
-  const daysRemaining = Math.max(0, Math.floor(timeRemaining / (1000 * 60 * 60 * 24)));
-  const hoursRemaining = Math.max(0, Math.floor((timeRemaining % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)));
+  const remainingMs = electionData.endTime.getTime() - Date.now();
+  const daysRemaining = Math.max(0, Math.floor(remainingMs / 86_400_000));
+  const hoursRemaining = Math.max(0, Math.floor((remainingMs % 86_400_000) / 3_600_000));
 
   return (
-    <Card className="p-6">
-      <div className="flex flex-col lg:flex-row gap-8">
-        {/* Left side - Election Info */}
-        <div className="flex-1">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">{electionData.name}</h2>
+    <div className="b-card">
+      {/* Header bar */}
+      <div className="flex items-center justify-between border-b-2 border-border px-6 py-3">
+        <div className="flex items-center gap-3">
+          <span className="b-label">// election</span>
+          <span className="font-mono text-[11px] font-bold">
+            #{String(electionData.id).padStart(3, "0")}
+          </span>
+        </div>
+        <span className="inline-flex items-center gap-2 border-2 border-success bg-success/10 px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-success">
+          <span className="h-1.5 w-1.5 bg-success b-blink" />
+          Live
+        </span>
+      </div>
 
-          <div className="space-y-4">
-            <div>
-              <p className="text-sm text-gray-500">Election Period</p>
-              <p className="font-medium">
-                {electionData.startTime.toLocaleDateString()} - {electionData.endTime.toLocaleDateString()}
-              </p>
-            </div>
+      <div className="grid gap-0 lg:grid-cols-[1fr_1.2fr]">
+        {/* Left — meta */}
+        <div className="border-b-2 border-border p-6 lg:border-b-0 lg:border-r-2">
+          <h2 className="b-display text-3xl sm:text-4xl">{electionData.name}</h2>
 
-            <div>
-              <p className="text-sm text-gray-500">Time Remaining</p>
-              <p className="font-medium">
-                {daysRemaining} days {hoursRemaining} hours
-              </p>
-            </div>
+          <dl className="mt-6 space-y-5">
+            <Stat
+              icon={<Calendar className="h-4 w-4" strokeWidth={2.5} />}
+              label="Election Period"
+              value={`${electionData.startTime.toLocaleDateString()} → ${electionData.endTime.toLocaleDateString()}`}
+            />
+            <Stat
+              icon={<Clock className="h-4 w-4" strokeWidth={2.5} />}
+              label="Time Remaining"
+              value={
+                <span className="b-mono">
+                  {daysRemaining}D {hoursRemaining}H
+                </span>
+              }
+            />
+            <Stat
+              icon={<Users className="h-4 w-4" strokeWidth={2.5} />}
+              label="Total Votes Cast"
+              value={
+                <span className="b-mono">
+                  {electionData.totalVotes.toLocaleString()}
+                </span>
+              }
+            />
+          </dl>
 
-            <div>
-              <p className="text-sm text-gray-500">Total Votes Cast</p>
-              <p className="font-medium">{electionData.totalVotes.toLocaleString()}</p>
-            </div>
-
-            <Link href="/vote">
-              <Button className="w-full mt-4" size="lg">
-                Cast Your Vote
-              </Button>
-            </Link>
-          </div>
+          <Link href="/vote">
+            <Button size="lg" className="mt-8 w-full">
+              Cast Your Vote <ArrowRight className="ml-1" />
+            </Button>
+          </Link>
         </div>
 
-        {/* Right side - Candidate Stats */}
-        <div className="flex-1 lg:border-l lg:pl-8">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-medium">Current Results</h3>
-            <div className="inline-flex rounded-md shadow-sm">
-              <button
-                type="button"
-                className={`px-3 py-1.5 text-sm font-medium rounded-l-md border ${
-                  viewMode === 'chart'
-                    ? 'bg-primary text-white border-primary'
-                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-                }`}
-                onClick={() => setViewMode('chart')}
-              >
-                Chart
-              </button>
-              <button
-                type="button"
-                className={`px-3 py-1.5 text-sm font-medium rounded-r-md border ${
-                  viewMode === 'table'
-                    ? 'bg-primary text-white border-primary'
-                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-                }`}
-                onClick={() => setViewMode('table')}
-              >
-                Table
-              </button>
+        {/* Right — results */}
+        <div className="p-6">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <span className="b-label">// live results</span>
+              <h3 className="font-display text-lg font-bold">Current Tally</h3>
             </div>
+            <ViewToggle value={viewMode} onChange={setViewMode} />
           </div>
 
-          {viewMode === 'chart' ? (
+          {viewMode === "chart" ? (
             <>
-              <div className="h-64">
+              <div className="h-56 border-2 border-border bg-secondary/30 p-2">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
                       data={electionData.candidates}
                       cx="50%"
                       cy="50%"
-                      innerRadius="60%"
+                      innerRadius="55%"
                       outerRadius="80%"
                       dataKey="percentage"
                       nameKey="name"
+                      stroke="hsl(var(--border))"
+                      strokeWidth={2}
                     >
-                      {electionData.candidates.map((entry, index) => (
+                      {electionData.candidates.map((_, i) => (
                         <Cell
-                          key={`cell-${index}`}
-                          fill={candidateColors[index % candidateColors.length]}
+                          key={i}
+                          fill={candidateColors[i % candidateColors.length]}
                         />
                       ))}
                     </Pie>
                     <Tooltip
-                      formatter={(value) => [`${value}%`, '']}
-                      labelFormatter={(name) => `${name}`}
+                      contentStyle={{
+                        background: "hsl(var(--card))",
+                        border: "2px solid hsl(var(--border))",
+                        borderRadius: 0,
+                        fontFamily: "JetBrains Mono, monospace",
+                        fontSize: 12,
+                      }}
+                      formatter={(v) => [`${v}%`, ""]}
                     />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
 
-              <div className="mt-4 space-y-3">
-                {electionData.candidates.map((candidate, index) => (
-                  <div key={index} className="flex items-center space-x-2">
-                    <div
-                      className="w-3 h-3 rounded-full"
-                      style={{ backgroundColor: candidateColors[index % candidateColors.length] }}
-                    />
-                    <div className="flex-1">
-                      <div className="flex justify-between items-center">
-                        <span className="font-medium">{candidate.name}</span>
-                        <span className="text-sm text-gray-500">{candidate.percentage}%</span>
+              <motion.div
+                className="mt-4 space-y-3"
+                initial="hidden"
+                animate="visible"
+                variants={{ visible: { transition: { staggerChildren: 0.08 } } }}
+              >
+                {electionData.candidates.map((candidate, i) => {
+                  const color = candidateColors[i % candidateColors.length];
+                  return (
+                    <motion.div key={i} variants={fadeUp}>
+                      <div className="mb-1 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="h-3 w-3 border-2 border-border"
+                            style={{ backgroundColor: color }}
+                          />
+                          <span className="font-display text-sm font-bold">
+                            {candidate.name}
+                          </span>
+                        </div>
+                        <span className="b-mono text-sm font-bold">
+                          <NumberRoll value={candidate.percentage} format={(v) => `${Math.round(v)}%`} />
+                        </span>
                       </div>
-                      <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
-                        <div
-                          className="h-1.5 rounded-full"
-                          style={{
-                            width: `${candidate.percentage}%`,
-                            backgroundColor: candidateColors[index % candidateColors.length]
-                          }}
+                      <div className="h-2 w-full border-2 border-border bg-background">
+                        <AnimatedBar
+                          percentage={candidate.percentage}
+                          color={color}
+                          delay={i * 0.06}
                         />
                       </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                    </motion.div>
+                  );
+                })}
+              </motion.div>
             </>
           ) : (
-            <div className="overflow-hidden rounded-lg border border-gray-200">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
+            <div className="border-2 border-border">
+              <table className="min-w-full">
+                <thead className="border-b-2 border-border bg-secondary">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Candidate</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Party</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Votes</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">%</th>
+                    <Th>Candidate</Th>
+                    <Th>Party</Th>
+                    <Th align="right">Votes</Th>
+                    <Th align="right">%</Th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {electionData.candidates.map((candidate, index) => (
-                    <tr key={index}>
-                      <td className="px-4 py-3 text-sm font-medium text-gray-900">{candidate.name}</td>
-                      <td className="px-4 py-3 text-sm text-gray-500">{candidate.party}</td>
-                      <td className="px-4 py-3 text-sm text-right text-gray-500">{candidate.votes.toLocaleString()}</td>
-                      <td className="px-4 py-3 text-sm text-right font-medium text-gray-900">{candidate.percentage}%</td>
+                <tbody>
+                  {electionData.candidates.map((c, i) => (
+                    <tr key={i} className="border-b border-border/40 last:border-b-0">
+                      <Td className="font-display font-bold">{c.name}</Td>
+                      <Td className="text-muted-foreground">{c.party}</Td>
+                      <Td align="right" className="b-mono">
+                        {c.votes.toLocaleString()}
+                      </Td>
+                      <Td align="right" className="b-mono font-bold">
+                        {c.percentage}%
+                      </Td>
                     </tr>
                   ))}
                 </tbody>
@@ -287,6 +276,103 @@ export function ElectionInfoCard() {
           )}
         </div>
       </div>
-    </Card>
+    </div>
+  );
+}
+
+function Stat({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center border-2 border-border bg-secondary">
+        {icon}
+      </div>
+      <div>
+        <dt className="b-label">{label}</dt>
+        <dd className="font-display text-base font-bold">{value}</dd>
+      </div>
+    </div>
+  );
+}
+
+function ViewToggle({
+  value,
+  onChange,
+}: {
+  value: "chart" | "table";
+  onChange: (v: "chart" | "table") => void;
+}) {
+  return (
+    <div className="inline-flex border-2 border-border">
+      <button
+        type="button"
+        onClick={() => onChange("chart")}
+        className={`flex h-8 w-9 items-center justify-center transition-colors ${
+          value === "chart"
+            ? "bg-foreground text-background"
+            : "bg-background text-foreground hover:bg-secondary"
+        }`}
+        aria-label="Chart view"
+      >
+        <BarChart3 className="h-4 w-4" strokeWidth={2.5} />
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange("table")}
+        className={`flex h-8 w-9 items-center justify-center border-l-2 border-border transition-colors ${
+          value === "table"
+            ? "bg-foreground text-background"
+            : "bg-background text-foreground hover:bg-secondary"
+        }`}
+        aria-label="Table view"
+      >
+        <Table2 className="h-4 w-4" strokeWidth={2.5} />
+      </button>
+    </div>
+  );
+}
+
+function Th({
+  children,
+  align = "left",
+}: {
+  children: React.ReactNode;
+  align?: "left" | "right";
+}) {
+  return (
+    <th
+      className={`px-3 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.12em] ${
+        align === "right" ? "text-right" : "text-left"
+      }`}
+    >
+      {children}
+    </th>
+  );
+}
+
+function Td({
+  children,
+  align = "left",
+  className = "",
+}: {
+  children: React.ReactNode;
+  align?: "left" | "right";
+  className?: string;
+}) {
+  return (
+    <td
+      className={`px-3 py-2 text-sm ${
+        align === "right" ? "text-right" : "text-left"
+      } ${className}`}
+    >
+      {children}
+    </td>
   );
 }

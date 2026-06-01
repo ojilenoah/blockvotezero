@@ -52,7 +52,7 @@ npm install
 Create a `.env.local` file in the root directory with the following variables:
 ```
 VITE_SUPABASE_URL=your_supabase_url
-VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+VITE_SUPABASE_PUBLISHABLE_KEY=your_supabase_publishable_key
 VITE_CONTRACT_ADDRESS=your_contract_address
 VITE_ALCHEMY_URL=your_alchemy_url
 DATABASE_URL=your_database_url

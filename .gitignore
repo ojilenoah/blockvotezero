@@ -1,6 +1,45 @@
+# Dependencies
 node_modules
+
+# Build output
 dist
-.DS_Store
 server/public
-vite.config.ts.*
+
+# Env / secrets
+.env
+.env.local
+.env.*.local
+
+# OS / editor
+.DS_Store
+.vscode
+*.log
 *.tar.gz
+vite.config.ts.*
+
+# Replit (legacy host)
+.replit
+.upm
+.config
+replit.nix
+replit.toml
+generated-icon.png
+
+# Dev / test scripts not needed for deployment
+test-*.js
+test-*.mjs
+test-*.ts
+show-*.js
+show-*.mjs
+scripts/
+
+# Top-level legacy utility folder (duplicate of client/src/utils/blockchain.ts)
+/utils/
+
+# Project notes, docs, attached assets — keep locally, don't ship
+attached_assets/
+chapter4.md
+diagrams.md
+
+# Legacy custom Vercel config (Vercel reads vercel.json, not this)
+vercel.mjs

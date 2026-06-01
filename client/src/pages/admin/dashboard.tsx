@@ -1,24 +1,24 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 import { AdminNavbar } from "@/components/admin-navbar";
 import { AdminElectionCreator } from "@/components/admin-election-creator";
 import { AdminElectionLog } from "@/components/admin-election-log";
 import { AdminManagement } from "@/components/admin-management";
 import { AdminNinManagement } from "@/components/admin-nin-management";
 import { BlockchainTest } from "@/components/blockchain-test";
-import { getActiveElectionId, getElectionInfo, getAllCandidates, getTotalVotes } from "@/utils/blockchain";
+import { getActiveElectionId, getElectionInfo, getTotalVotes } from "@/utils/blockchain";
 
 export default function AdminDashboard() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [adminAddress, setAdminAddress] = useState<string>("");
+  const { user, isAuthenticated, loading, signOut } = useAuth();
+  const adminEmail = user?.email ?? "";
 
   // Query for getting elections data
   const { data: electionData, isLoading: loadingElections } = useQuery({
@@ -90,36 +90,35 @@ export default function AdminDashboard() {
   });
 
   useEffect(() => {
-    const isAdmin = sessionStorage.getItem("isAdmin") === "true";
-    const storedAddress = sessionStorage.getItem("adminAddress");
-
-    if (!isAdmin || !storedAddress) {
+    if (loading) return;
+    if (!isAuthenticated) {
       toast({
         title: "Authentication required",
-        description: "Please login with an admin wallet",
+        description: "Sign in to access the admin console.",
         variant: "destructive",
       });
       setLocation("/admin/login");
-      return;
     }
+  }, [loading, isAuthenticated, setLocation, toast]);
 
-    setIsAuthenticated(true);
-    setAdminAddress(storedAddress);
-  }, [setLocation, toast]);
-
-  const handleLogout = () => {
-    sessionStorage.removeItem("isAdmin");
-    sessionStorage.removeItem("adminAddress");
-    setIsAuthenticated(false);
+  const handleLogout = async () => {
+    await signOut();
     toast({
       title: "Logged out",
-      description: "Successfully logged out from admin panel",
+      description: "Signed out of the admin console.",
     });
     setLocation("/admin/login");
   };
 
-  if (!isAuthenticated) {
-    return <div className="p-8 text-center">Authenticating...</div>;
+  if (loading || !isAuthenticated) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="text-center">
+          <div className="b-label">// authenticating…</div>
+          <div className="b-display mt-2 text-2xl">Verifying session</div>
+        </div>
+      </div>
+    );
   }
 
   const isElectionActive = electionData?.elections.some(e => e.status === "Active") ?? false;
@@ -127,21 +126,17 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <AdminNavbar address={adminAddress} onLogout={handleLogout} />
+      <AdminNavbar identity={adminEmail} onLogout={handleLogout} />
 
       <main className="flex-grow">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="flex justify-between items-center mb-6">
+        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+          <div className="mb-6 flex items-end justify-between border-b-2 border-border pb-4">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
-              <p className="text-gray-600">Manage elections and system settings</p>
-            </div>
-            <div className="flex items-center space-x-2">
-              <div className="text-sm text-gray-500 text-right mr-2">
-                <div>Connected as:</div>
-                <div className="font-mono">{adminAddress}</div>
-              </div>
-              <Button variant="outline" onClick={handleLogout}>Logout</Button>
+              <div className="b-label">// admin · console</div>
+              <h1 className="b-display text-4xl">Dashboard</h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Manage elections, voter registry, and admin settings.
+              </p>
             </div>
           </div>
 
@@ -213,11 +208,12 @@ export default function AdminDashboard() {
                 <CardHeader>
                   <CardTitle>Admin Management</CardTitle>
                   <CardDescription>
-                    Update admin wallet address with MetaMask signature verification
+                    Legacy wallet-based admin tools. Account auth runs through
+                    Supabase — sign in with email/password to access this console.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <AdminManagement currentAddress={adminAddress} />
+                  <AdminManagement currentAddress={adminEmail} />
                 </CardContent>
               </Card>
             </TabsContent>

@@ -69,7 +69,7 @@ export function NinStatusCheck() {
       <CardContent className="space-y-4">
         {!isConnected ? (
           <div className="space-y-4">
-            <Alert className="bg-yellow-50 border-yellow-200">
+            <Alert variant="warning">
               <AlertTitle>Wallet Connection Required</AlertTitle>
               <AlertDescription>
                 Connect your wallet to check your NIN status.
@@ -102,7 +102,7 @@ export function NinStatusCheck() {
             </Button>
           </Alert>
         ) : !userDetails ? (
-          <Alert className="bg-blue-50 border-blue-200">
+          <Alert variant="info">
             <AlertTitle>No NIN Found</AlertTitle>
             <AlertDescription>
               We couldn't find a registered NIN associated with this wallet address.

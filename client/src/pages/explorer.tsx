@@ -15,25 +15,22 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { ALCHEMY_URL, CONTRACT_ADDRESS } from "@/utils/blockchain";
-import { getActiveElectionId, getElectionInfo, getAllCandidates, getTotalVotes } from "@/utils/blockchain";
+import {
+  CONTRACT_ADDRESS,
+  HAS_ETHERSCAN_KEY,
+  getActiveElectionId,
+  getElectionInfo,
+  getTotalVotes,
+  getContractTransactions,
+  explorerAddressUrl,
+  explorerTxUrl,
+  isSyntheticTxHash,
+} from "@/utils/blockchain";
+import type { Transaction } from "@/utils/blockchain";
 import { useMetaMask } from "@/hooks/use-metamask";
 import { useToast } from "@/hooks/use-toast";
 import { ChevronLeft, ChevronRight, Loader2, ExternalLink, Copy, Check } from "lucide-react";
-import { ethers } from "ethers";
-import VotingSystemABI from "../contracts/VotingSystem.json";
 import { LastElectionWinner } from "@/components/last-election-winner";
-
-interface Transaction {
-  hash: string;
-  timestamp: Date;
-  from: string;
-  to: string;
-  value: string;
-  asset: string;
-  status: string;
-  functionName: string;
-}
 
 interface Election {
   id: number;
@@ -122,114 +119,23 @@ export default function Explorer() {
     refetchInterval: 60000,
   });
 
-  // Transactions data query using contract events
+  // Real on-chain transactions via contract event logs.
   const { data: transactionData, isLoading: loadingTransactions, isFetching, refetch } = useQuery({
-    queryKey: ['transactions', 'fixed'],
+    queryKey: ['contractTransactions', 'page', currentPage],
     queryFn: async () => {
-      try {
-        console.log("Fetching transactions for contract:", CONTRACT_ADDRESS);
-        const provider = new ethers.JsonRpcProvider(ALCHEMY_URL);
-        const contract = new ethers.Contract(CONTRACT_ADDRESS, VotingSystemABI.abi, provider);
-        
-        const latestBlock = await provider.getBlockNumber();
-        console.log("Latest block:", latestBlock);
-        
-        const processedTransactions: Transaction[] = [];
-        
-        // Since we can see election data working, reconstruct activity from contract state
-        console.log("NEW: Reconstructing transaction activity from contract state...");
-        
-        try {
-          // Get the highest election ID to know how many elections exist
-          const currentElectionId = await getActiveElectionId();
-          console.log(`NEW: Found elections up to ID: ${currentElectionId}`);
-          
-          // Process recent elections (last 10) to show activity
-          const maxElections = Math.min(currentElectionId, 10);
-          for (let electionId = Math.max(1, currentElectionId - maxElections + 1); electionId <= currentElectionId; electionId++) {
-            try {
-              const electionInfo = await getElectionInfo(electionId);
-              if (electionInfo && electionInfo.name) {
-                // Add election creation transaction
-                processedTransactions.push({
-                  hash: `0x${electionId.toString(16).padStart(8, '0')}create${'0'.repeat(48)}`,
-                  timestamp: new Date(electionInfo.startTime.getTime() - 3600000), // 1 hour before start
-                  from: "0xAdmin" + "0".repeat(34),
-                  to: CONTRACT_ADDRESS,
-                  value: "0",
-                  asset: "MATIC",
-                  status: "Success",
-                  functionName: "createElection"
-                });
-                
-                // Get candidates and their votes to reconstruct vote transactions
-                const candidates = await getAllCandidates(electionId);
-                let totalVotesSoFar = 0;
-                
-                for (const candidate of candidates) {
-                  for (let voteNum = 0; voteNum < candidate.votes; voteNum++) {
-                    totalVotesSoFar++;
-                    const voteTimestamp = new Date(
-                      electionInfo.startTime.getTime() + (totalVotesSoFar * 300000) // 5 minutes between votes
-                    );
-                    
-                    processedTransactions.push({
-                      hash: `0x${electionId.toString(16).padStart(4, '0')}${candidate.index.toString(16).padStart(4, '0')}vote${voteNum.toString(16).padStart(8, '0')}${'0'.repeat(40)}`,
-                      timestamp: voteTimestamp,
-                      from: `0xVoter${totalVotesSoFar.toString(16).padStart(6, '0')}${'0'.repeat(32)}`,
-                      to: CONTRACT_ADDRESS,
-                      value: "0",
-                      asset: "MATIC",
-                      status: "Success",
-                      functionName: "castVote"
-                    });
-                  }
-                }
-                
-                console.log(`NEW: Election ${electionId} (${electionInfo.name}): ${candidates.reduce((sum, c) => sum + c.votes, 0)} votes`);
-              }
-            } catch (electionError) {
-              console.warn(`NEW: Could not process election ${electionId}:`, electionError);
-            }
-          }
-          
-          console.log(`NEW: Generated ${processedTransactions.length} transaction records from contract activity`);
-          
-        } catch (error) {
-          console.error("NEW: Error reconstructing transactions:", error);
-        }
-        
-        // Remove duplicates and sort by timestamp
-        const uniqueTransactions = processedTransactions.filter((tx, index, self) => 
-          index === self.findIndex(t => t.hash === tx.hash)
-        );
-        
-        uniqueTransactions.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-        
-        console.log(`Processed ${uniqueTransactions.length} unique transactions`);
-        
-        // If no transactions found, provide helpful info
-        if (uniqueTransactions.length === 0) {
-          console.log("No transactions found for this contract. This could mean:");
-          console.log("- No elections have been created yet");
-          console.log("- No votes have been cast yet");
-          console.log("- The contract is newly deployed");
-        }
-        
-        return {
-          transactions: uniqueTransactions,
-          totalTransactions: uniqueTransactions.length
-        };
-      } catch (error) {
-        console.error('Error fetching transactions:', error);
-        return {
-          transactions: [],
-          totalTransactions: 0
-        };
-      }
+      const { transactions, hasMore, nextBlock } = await getContractTransactions(
+        undefined,
+        100 // fetch up to 100, paginate locally
+      );
+      return {
+        transactions,
+        totalTransactions: transactions.length,
+        hasMore,
+        nextBlock,
+      };
     },
-    staleTime: 30000,
-    refetchInterval: 60000,
+    staleTime: 60_000,
+    refetchInterval: 120_000,
   });
 
   const handleCopyHash = (hash: string) => {
@@ -250,7 +156,7 @@ export default function Explorer() {
       return (
         tx.hash.toLowerCase().includes(query) ||
         tx.from.toLowerCase().includes(query) ||
-        tx.functionName.toLowerCase().includes(query)
+        tx.method.toLowerCase().includes(query)
       );
     })
     .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()) || [];
@@ -275,7 +181,7 @@ export default function Explorer() {
 
   const getTransactionStatusBadge = (status: string) => {
     return (
-      <Badge variant={status === "Success" ? "default" : "destructive"}>
+      <Badge variant={status === "Confirmed" || status === "Success" ? "success" : "destructive"}>
         {status}
       </Badge>
     );
@@ -354,19 +260,51 @@ export default function Explorer() {
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading transactions...
                       </div>
                     ) : currentTransactions.length === 0 ? (
-                      <div className="text-center py-12 text-muted-foreground space-y-4">
-                        <div className="text-lg font-medium">No Recent Transactions Available</div>
-                        <div className="text-sm max-w-md mx-auto">
-                          <p className="mb-2">
-                            The Polygon Amoy testnet has pruned older block data. Contract transactions 
-                            from earlier blocks are not currently accessible through the RPC provider.
+                      <div className="space-y-4 py-10 text-center">
+                        <div className="b-label">// nothing to show</div>
+                        <div className="b-display text-2xl">No Transactions Loaded</div>
+                        {HAS_ETHERSCAN_KEY ? (
+                          <p className="mx-auto max-w-md text-sm text-muted-foreground">
+                            The contract has no transactions yet, or the index
+                            hasn't caught up. Hit refresh in a moment, or check
+                            the contract directly on PolygonScan.
                           </p>
-                          <p>
-                            New transactions will appear here when they occur on the contract at:
-                          </p>
-                          <code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-xs break-all">
+                        ) : (
+                          <div className="mx-auto max-w-lg space-y-3 text-sm text-muted-foreground">
+                            <p>
+                              The Explorer is falling back to scanning recent
+                              blocks via the public RPC — which is rate-limited
+                              and rarely returns historical data.
+                            </p>
+                            <div className="border-2 border-warning bg-warning/10 p-4 text-left">
+                              <div className="b-label-fg mb-1">// recommended</div>
+                              <p className="text-foreground">
+                                Add a free <span className="font-mono font-bold">VITE_ETHERSCAN_API_KEY</span>{" "}
+                                to your <span className="font-mono">.env.local</span> and restart{" "}
+                                <span className="font-mono">npm run dev</span>. It'll instantly
+                                pull every transaction on the contract.
+                              </p>
+                              <a
+                                href="https://etherscan.io/myapikey"
+                                target="_blank"
+                                rel="noreferrer"
+                                className="mt-2 inline-block font-mono text-xs font-bold uppercase tracking-[0.12em] text-primary hover:underline"
+                              >
+                                Get a free key at etherscan.io →
+                              </a>
+                            </div>
+                          </div>
+                        )}
+                        <div className="mx-auto max-w-md text-xs text-muted-foreground">
+                          Contract:{" "}
+                          <a
+                            href={explorerAddressUrl(CONTRACT_ADDRESS)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="font-mono break-all hover:text-primary"
+                          >
                             {CONTRACT_ADDRESS}
-                          </code>
+                          </a>
                         </div>
                       </div>
                     ) : (
@@ -382,35 +320,73 @@ export default function Explorer() {
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {currentTransactions.map((tx) => (
-                              <TableRow key={tx.hash}>
-                                <TableCell className="font-mono flex items-center space-x-2">
-                                  <span>{tx.hash.substring(0, 10)}...</span>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-6 w-6 p-0"
-                                    onClick={() => handleCopyHash(tx.hash)}
-                                  >
-                                    {copiedHash === tx.hash ? (
-                                      <Check className="h-4 w-4" />
+                            {currentTransactions.map((tx) => {
+                              const synthetic = isSyntheticTxHash(tx.hash);
+                              const fromLooksReal = tx.from?.startsWith("0x") && tx.from.length === 42;
+                              return (
+                                <TableRow key={tx.hash}>
+                                  <TableCell className="font-mono">
+                                    <div className="flex items-center gap-2">
+                                      {synthetic ? (
+                                        <span
+                                          className="text-muted-foreground"
+                                          title="Reconstructed from contract state — no on-chain tx hash"
+                                        >
+                                          state · #{tx.hash.split(":").slice(-2).join(":")}
+                                        </span>
+                                      ) : (
+                                        <>
+                                          <a
+                                            href={explorerTxUrl(tx.hash)}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-primary hover:underline"
+                                            title={tx.hash}
+                                          >
+                                            {tx.hash.substring(0, 10)}…
+                                          </a>
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-6 w-6 p-0"
+                                            onClick={() => handleCopyHash(tx.hash)}
+                                            aria-label="Copy hash"
+                                          >
+                                            {copiedHash === tx.hash ? (
+                                              <Check className="h-3 w-3" />
+                                            ) : (
+                                              <Copy className="h-3 w-3" />
+                                            )}
+                                          </Button>
+                                        </>
+                                      )}
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>{tx.method}</TableCell>
+                                  <TableCell className="font-mono">
+                                    {fromLooksReal ? (
+                                      <a
+                                        href={explorerAddressUrl(tx.from)}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="hover:text-primary hover:underline"
+                                        title={tx.from}
+                                      >
+                                        {tx.from.substring(0, 6)}…{tx.from.substring(tx.from.length - 4)}
+                                      </a>
                                     ) : (
-                                      <Copy className="h-4 w-4" />
+                                      <span className="text-muted-foreground">{tx.from}</span>
                                     )}
-                                  </Button>
-                                </TableCell>
-                                <TableCell>{tx.functionName}</TableCell>
-                                <TableCell className="font-mono">
-                                  {tx.from.substring(0, 10)}...
-                                </TableCell>
-                                <TableCell>
-                                  {getTransactionStatusBadge(tx.status)}
-                                </TableCell>
-                                <TableCell>
-                                  {tx.timestamp.toLocaleString()}
-                                </TableCell>
-                              </TableRow>
-                            ))}
+                                  </TableCell>
+                                  <TableCell>
+                                    {getTransactionStatusBadge(tx.status)}
+                                  </TableCell>
+                                  <TableCell>
+                                    {tx.timestamp.toLocaleString()}
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
                           </TableBody>
                         </Table>
                       </div>
@@ -472,14 +448,14 @@ export default function Explorer() {
                           {isFetching ? "Refreshing..." : "Refresh Transactions"}
                         </Button>
                         <a
-                          href={`https://www.oklink.com/amoy/address/${CONTRACT_ADDRESS}`}
+                          href={explorerAddressUrl(CONTRACT_ADDRESS)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-block"
                         >
                           <Button variant="outline">
                             <ExternalLink className="h-4 w-4 mr-2" />
-                            View in Explorer
+                            View on PolygonScan
                           </Button>
                         </a>
                       </div>

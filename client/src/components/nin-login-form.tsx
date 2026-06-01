@@ -92,7 +92,7 @@ export function NinLoginForm({ onComplete }: NinLoginFormProps) {
       <CardContent className="space-y-4">
         {!isConnected ? (
           <div className="space-y-4">
-            <Alert className="bg-yellow-50 border-yellow-200">
+            <Alert variant="warning">
               <AlertTitle>Wallet Connection Required</AlertTitle>
               <AlertDescription>
                 Connect your wallet to proceed with voter verification.

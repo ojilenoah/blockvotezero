@@ -2,59 +2,383 @@
 @tailwind components;
 @tailwind utilities;
 
+/* =========================================================================
+   BLOCKVOTE — BRUTALIST DESIGN TOKENS
+   High contrast, hard edges, hard offset shadows, mono numerals.
+   ========================================================================= */
+
 @layer base {
+  :root {
+    /* Surfaces */
+    --background: 42 33% 96%;       /* paper */
+    --foreground: 0 0% 6%;          /* ink */
+
+    --card: 0 0% 100%;              /* pure white card */
+    --card-foreground: 0 0% 6%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 6%;
+
+    /* Accent: blood orange */
+    --primary: 18 100% 50%;         /* #FF4D00 */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 0 0% 91%;
+    --secondary-foreground: 0 0% 6%;
+
+    --muted: 0 0% 91%;
+    --muted-foreground: 0 0% 32%;
+
+    --accent: 18 100% 50%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 150 80% 28%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 100% 50%;
+    --warning-foreground: 0 0% 6%;
+
+    --border: 0 0% 6%;              /* hard black border */
+    --input: 0 0% 6%;
+    --ring: 18 100% 50%;
+
+    --chart-1: 18 100% 50%;
+    --chart-2: 150 80% 28%;
+    --chart-3: 230 90% 55%;
+    --chart-4: 270 70% 50%;
+    --chart-5: 38 100% 50%;
+
+    --radius: 0px;
+
+    /* Brutalist shadows */
+    --brutal-shadow: 4px 4px 0 0 hsl(var(--foreground));
+    --brutal-shadow-sm: 2px 2px 0 0 hsl(var(--foreground));
+    --brutal-shadow-lg: 8px 8px 0 0 hsl(var(--foreground));
+
+    /* Duolingo-style button depth — darker tints of each variant.
+       Stay constant across themes; if anything, they read MORE
+       cleanly on dark surfaces. */
+    --duo-shadow-primary: 18 100% 28%;
+    --duo-shadow-success: 150 80% 16%;
+    --duo-shadow-destructive: 0 84% 36%;
+    --duo-shadow-warning: 38 100% 32%;
+    --duo-shadow-secondary: 0 0% 72%;
+    --duo-shadow-outline: 0 0% 75%;
+    --duo-shadow-foreground: 0 0% 0%;
+
+    color-scheme: light;
+  }
+
+  .dark {
+    --background: 0 0% 6%;          /* ink */
+    --foreground: 42 33% 94%;       /* paper */
+
+    --card: 0 0% 9%;
+    --card-foreground: 42 33% 94%;
+
+    --popover: 0 0% 9%;
+    --popover-foreground: 42 33% 94%;
+
+    --primary: 18 100% 55%;         /* slightly brighter orange in dark */
+    --primary-foreground: 0 0% 6%;
+
+    --secondary: 0 0% 15%;
+    --secondary-foreground: 42 33% 94%;
+
+    --muted: 0 0% 15%;
+    --muted-foreground: 0 0% 65%;
+
+    --accent: 18 100% 55%;
+    --accent-foreground: 0 0% 6%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 6%;
+
+    --success: 150 70% 45%;
+    --success-foreground: 0 0% 6%;
+
+    --warning: 38 100% 55%;
+    --warning-foreground: 0 0% 6%;
+
+    --border: 42 33% 94%;
+    --input: 42 33% 94%;
+    --ring: 18 100% 55%;
+
+    --chart-1: 18 100% 55%;
+    --chart-2: 150 70% 45%;
+    --chart-3: 230 90% 65%;
+    --chart-4: 270 70% 65%;
+    --chart-5: 38 100% 55%;
+
+    --brutal-shadow: 4px 4px 0 0 hsl(var(--foreground));
+    --brutal-shadow-sm: 2px 2px 0 0 hsl(var(--foreground));
+    --brutal-shadow-lg: 8px 8px 0 0 hsl(var(--foreground));
+
+    /* Duo shadows in dark mode — slightly deeper saturation so they
+       remain visible against the ink background, plus neutrals
+       flipped to dark gray. */
+    --duo-shadow-primary: 18 100% 32%;
+    --duo-shadow-success: 150 70% 22%;
+    --duo-shadow-destructive: 0 84% 42%;
+    --duo-shadow-warning: 38 100% 38%;
+    --duo-shadow-secondary: 0 0% 4%;
+    --duo-shadow-outline: 0 0% 4%;
+    --duo-shadow-foreground: 42 33% 70%;
+
+    color-scheme: dark;
+  }
+
   * {
     @apply border-border;
   }
 
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
   body {
-    @apply font-sans antialiased bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+    font-feature-settings: 'ss01', 'cv11';
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Use mono digits everywhere stats/numerics live without us asking */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Selection */
+  ::selection {
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+  ::-webkit-scrollbar-track {
+    background: hsl(var(--background));
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--foreground));
+    border: 3px solid hsl(var(--background));
   }
 }
 
-/* Dark mode overrides */
-.dark .bg-white {
-  @apply bg-gray-900;
+/* =========================================================================
+   BRUTALIST UTILITY CLASSES
+   ========================================================================= */
+@layer components {
+  /* Eyebrow / label — uppercase mono, all over the UI */
+  .b-label {
+    @apply font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground;
+  }
+
+  .b-label-fg {
+    @apply font-mono text-[11px] uppercase tracking-[0.15em] text-foreground;
+  }
+
+  /* Display heading */
+  .b-display {
+    font-family: 'Space Grotesk', 'Inter', sans-serif;
+    @apply font-bold tracking-tight leading-[0.95];
+  }
+
+  /* Mono numeric */
+  .b-mono {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-feature-settings: 'tnum', 'zero';
+  }
+
+  /* Brutal card surface */
+  .b-card {
+    @apply bg-card text-card-foreground border-2 border-border;
+    box-shadow: var(--brutal-shadow);
+  }
+
+  .b-card-flat {
+    @apply bg-card text-card-foreground border-2 border-border;
+  }
+
+  /* Push-on-hover effect for clickable brutal surfaces */
+  .b-press {
+    transition: transform 80ms ease, box-shadow 80ms ease;
+  }
+  .b-press:hover {
+    transform: translate(2px, 2px);
+    box-shadow: 2px 2px 0 0 hsl(var(--foreground));
+  }
+  .b-press:active {
+    transform: translate(4px, 4px);
+    box-shadow: 0 0 0 0 hsl(var(--foreground));
+  }
+
+  /* Status dot */
+  .b-dot {
+    @apply inline-block h-2.5 w-2.5 border-2 border-border;
+  }
+
+  /* Grid backdrop — for the hero */
+  .b-grid-bg {
+    background-image:
+      linear-gradient(to right, hsl(var(--foreground) / 0.08) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(var(--foreground) / 0.08) 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+
+  /* Ticker / marquee */
+  @keyframes b-marquee {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-50%); }
+  }
+  .b-marquee {
+    animation: b-marquee 40s linear infinite;
+  }
+
+  /* Blink dot for live indicators */
+  @keyframes b-blink {
+    0%, 60% { opacity: 1; }
+    61%, 100% { opacity: 0.25; }
+  }
+  .b-blink {
+    animation: b-blink 1.4s ease-in-out infinite;
+  }
+
+  /* =========================================================================
+     DUOLINGO-STYLE BUTTONS
+     Chunky, rounded, with a color-matched bottom "depth" shadow.
+     On hover the depth grows; on press the button compresses into it.
+     ========================================================================= */
+  .duo-btn {
+    border-radius: 14px;
+    transition:
+      transform 80ms cubic-bezier(0.2, 0.8, 0.3, 1),
+      box-shadow 80ms cubic-bezier(0.2, 0.8, 0.3, 1),
+      background-color 80ms;
+    user-select: none;
+    -webkit-user-select: none;
+    will-change: transform;
+  }
+  .duo-btn:hover { transform: translateY(-1px); }
+  .duo-btn:active { transform: translateY(4px); box-shadow: none !important; }
+
+  /* per-variant depth shadows — 0 vertical offset, no x, color-matched */
+  .duo-shadow-primary     { box-shadow: 0 4px 0 0 hsl(var(--duo-shadow-primary)); }
+  .duo-shadow-success     { box-shadow: 0 4px 0 0 hsl(var(--duo-shadow-success)); }
+  .duo-shadow-destructive { box-shadow: 0 4px 0 0 hsl(var(--duo-shadow-destructive)); }
+  .duo-shadow-warning     { box-shadow: 0 4px 0 0 hsl(var(--duo-shadow-warning)); }
+  .duo-shadow-secondary   { box-shadow: 0 4px 0 0 hsl(var(--duo-shadow-secondary)); }
+  .duo-shadow-outline     { box-shadow: 0 4px 0 0 hsl(var(--duo-shadow-outline)); }
+  .duo-shadow-fg          { box-shadow: 0 4px 0 0 hsl(var(--duo-shadow-foreground)); }
+
+  .duo-shadow-primary:hover     { box-shadow: 0 6px 0 0 hsl(var(--duo-shadow-primary)); }
+  .duo-shadow-success:hover     { box-shadow: 0 6px 0 0 hsl(var(--duo-shadow-success)); }
+  .duo-shadow-destructive:hover { box-shadow: 0 6px 0 0 hsl(var(--duo-shadow-destructive)); }
+  .duo-shadow-warning:hover     { box-shadow: 0 6px 0 0 hsl(var(--duo-shadow-warning)); }
+  .duo-shadow-secondary:hover   { box-shadow: 0 6px 0 0 hsl(var(--duo-shadow-secondary)); }
+  .duo-shadow-outline:hover     { box-shadow: 0 6px 0 0 hsl(var(--duo-shadow-outline)); }
+  .duo-shadow-fg:hover          { box-shadow: 0 6px 0 0 hsl(var(--duo-shadow-foreground)); }
 }
 
-.dark .bg-gray-50 {
-  @apply bg-gray-800;
-}
+/* =========================================================================
+   DARK MODE BRIDGE
+   Pages that still use raw color classes are mapped to semantic tokens
+   so the site stays coherent in dark mode while we finish the full pass.
+   ========================================================================= */
+.dark .bg-white { background-color: hsl(var(--card)) !important; }
+.dark .bg-gray-50 { background-color: hsl(var(--secondary)) !important; }
+.dark .bg-gray-100 { background-color: hsl(var(--secondary)) !important; }
+.dark .bg-slate-50 { background-color: hsl(var(--secondary)) !important; }
+.dark .bg-slate-100 { background-color: hsl(var(--secondary)) !important; }
 
-.dark .text-gray-900 {
-  @apply text-gray-100;
-}
+.dark .text-gray-900 { color: hsl(var(--foreground)) !important; }
+.dark .text-gray-800 { color: hsl(var(--foreground)) !important; }
+.dark .text-gray-700 { color: hsl(var(--foreground) / 0.85) !important; }
+.dark .text-gray-600 { color: hsl(var(--muted-foreground)) !important; }
+.dark .text-gray-500 { color: hsl(var(--muted-foreground)) !important; }
+.dark .text-gray-400 { color: hsl(var(--muted-foreground) / 0.8) !important; }
+.dark .text-slate-900 { color: hsl(var(--foreground)) !important; }
+.dark .text-slate-500 { color: hsl(var(--muted-foreground)) !important; }
+.dark .text-slate-400 { color: hsl(var(--muted-foreground) / 0.8) !important; }
 
-.dark .text-gray-800 {
-  @apply text-gray-200;
-}
+.dark .border-gray-100 { border-color: hsl(var(--border) / 0.3) !important; }
+.dark .border-gray-200 { border-color: hsl(var(--border) / 0.5) !important; }
+.dark .border-gray-300 { border-color: hsl(var(--border) / 0.7) !important; }
+.dark .border-slate-100 { border-color: hsl(var(--border) / 0.3) !important; }
+.dark .border-slate-200 { border-color: hsl(var(--border) / 0.5) !important; }
 
-.dark .text-gray-700 {
-  @apply text-gray-300;
-}
+.dark .divide-gray-200 > * + * { border-color: hsl(var(--border) / 0.5) !important; }
 
-.dark .text-gray-600 {
-  @apply text-gray-400;
-}
+.dark .hover\:bg-gray-50:hover { background-color: hsl(var(--secondary)) !important; }
+.dark .hover\:bg-gray-100:hover { background-color: hsl(var(--secondary)) !important; }
+.dark .hover\:text-gray-700:hover { color: hsl(var(--foreground)) !important; }
+.dark .hover\:text-gray-800:hover { color: hsl(var(--foreground)) !important; }
 
-/* No change needed for text-gray-500 in dark mode */
+/* Status pill / alert backgrounds — pastels are invisible in dark mode,
+   so we route them through semantic tokens at low alpha. The text colors
+   are also flipped so they remain readable on the darker tinted bg. */
 
-.dark .border-gray-200 {
-  @apply border-gray-700;
-}
+/* warning — yellow / amber */
+.dark .bg-yellow-50,
+.dark .bg-yellow-100,
+.dark .bg-amber-50,
+.dark .bg-amber-100,
+.dark .bg-orange-50,
+.dark .bg-orange-100 { background-color: hsl(var(--warning) / 0.12) !important; }
 
-.dark .shadow-sm {
-  @apply shadow-none;
-}
+.dark .border-yellow-100,
+.dark .border-yellow-200,
+.dark .border-amber-100,
+.dark .border-amber-200,
+.dark .border-orange-100,
+.dark .border-orange-200 { border-color: hsl(var(--warning) / 0.5) !important; }
 
-.dark .hover\:bg-gray-50:hover {
-  @apply hover:bg-gray-800;
-}
+.dark .text-yellow-700,
+.dark .text-yellow-800,
+.dark .text-yellow-900,
+.dark .text-amber-700,
+.dark .text-amber-800,
+.dark .text-orange-600,
+.dark .text-orange-700,
+.dark .text-orange-800 { color: hsl(var(--warning)) !important; }
 
-.dark .hover\:text-gray-700:hover {
-  @apply hover:text-gray-300;
-}
+/* success — green */
+.dark .bg-green-50,
+.dark .bg-green-100 { background-color: hsl(var(--success) / 0.12) !important; }
 
-.dark .hover\:text-gray-800:hover {
-  @apply hover:text-gray-200;
-}
+.dark .border-green-100,
+.dark .border-green-200,
+.dark .border-green-300 { border-color: hsl(var(--success) / 0.5) !important; }
+
+.dark .text-green-700,
+.dark .text-green-800,
+.dark .text-green-900 { color: hsl(var(--success)) !important; }
+
+/* destructive — red */
+.dark .bg-red-50,
+.dark .bg-red-100 { background-color: hsl(var(--destructive) / 0.12) !important; }
+
+.dark .border-red-100,
+.dark .border-red-200 { border-color: hsl(var(--destructive) / 0.5) !important; }
+
+.dark .text-red-500,
+.dark .text-red-600,
+.dark .text-red-700,
+.dark .text-red-800 { color: hsl(var(--destructive)) !important; }
+
+/* info — blue (mapped to primary accent to stay on-palette) */
+.dark .bg-blue-50,
+.dark .bg-blue-100 { background-color: hsl(var(--primary) / 0.12) !important; }
+
+.dark .border-blue-100,
+.dark .border-blue-200 { border-color: hsl(var(--primary) / 0.5) !important; }
+
+.dark .text-blue-700,
+.dark .text-blue-800,
+.dark .text-blue-900 { color: hsl(var(--primary)) !important; }

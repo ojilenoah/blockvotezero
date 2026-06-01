@@ -1,8 +1,11 @@
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
-import { getActiveElectionId, getElectionInfo } from "@/utils/blockchain";
+import { Calendar, Clock, ArrowRight } from "lucide-react";
+import {
+  getActiveElectionId,
+  getElectionsBundle,
+} from "@/utils/blockchain";
 
 interface NoActiveElectionProps {
   title?: string;
@@ -18,159 +21,121 @@ interface ScheduledElection {
   endTime: Date;
 }
 
-export function NoActiveElection({ 
+export function NoActiveElection({
   title = "No Active Elections",
   description = "There are no elections currently open for voting",
   showSchedule = true,
-  showButtons = true
+  showButtons = true,
 }: NoActiveElectionProps) {
-  const [scheduledElections, setScheduledElections] = useState<ScheduledElection[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [scheduled, setScheduled] = useState<ScheduledElection[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Fetch upcoming elections that are scheduled but not yet started
   useEffect(() => {
     if (!showSchedule) return;
-
-    const fetchScheduledElections = async () => {
-      setIsLoading(true);
+    const fetchScheduled = async () => {
+      setLoading(true);
       try {
-        const currentElectionId = await getActiveElectionId();
-        const elections: ScheduledElection[] = [];
-        
-        // Iterate through election IDs to find scheduled elections
-        // We'll look through the first 10 possible IDs
-        const maxElectionsToFetch = 10;
-        
-        for (let id = 1; id <= Math.max(currentElectionId, maxElectionsToFetch); id++) {
-          const electionInfo = await getElectionInfo(id);
-          
-          if (electionInfo && electionInfo.name) {
-            const now = new Date();
-            const startTime = new Date(electionInfo.startTime);
-            
-            // Only include elections that haven't started yet
-            if (startTime > now) {
-              elections.push({
-                id,
-                name: electionInfo.name,
-                startTime,
-                endTime: new Date(electionInfo.endTime)
-              });
-            }
+        const nextId = await getActiveElectionId();
+        const ids = Array.from(
+          { length: Math.max(1, nextId - 1) },
+          (_, i) => i + 1
+        );
+        const bundles = await getElectionsBundle(ids);
+        const now = new Date();
+        const next: ScheduledElection[] = [];
+        for (const id of ids) {
+          const b = bundles.get(id);
+          if (!b?.info?.name) continue;
+          if (b.info.startTime > now) {
+            next.push({
+              id,
+              name: b.info.name,
+              startTime: b.info.startTime,
+              endTime: b.info.endTime,
+            });
           }
         }
-        
-        // Sort elections by start date (ascending)
-        elections.sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
-        
-        setScheduledElections(elections);
-      } catch (error) {
-        console.error("Error fetching scheduled elections:", error);
+        next.sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
+        setScheduled(next);
+      } catch (err) {
+        console.error("Error fetching scheduled elections:", err);
       } finally {
-        setIsLoading(false);
+        setLoading(false);
       }
     };
-    
-    fetchScheduledElections();
+    fetchScheduled();
   }, [showSchedule]);
 
   return (
-    <Card className="text-center max-w-2xl mx-auto">
-      <CardHeader>
-        <div className="flex justify-center mb-4">
-          <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-8 w-8 text-slate-400"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-              />
-            </svg>
+    <div className="mx-auto max-w-2xl">
+      <div className="b-card">
+        <div className="px-6 pt-8 pb-2 text-center">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center border-2 border-border bg-secondary">
+            <Calendar className="h-7 w-7" strokeWidth={2} />
           </div>
+          <h3 className="b-display mt-4 text-2xl">{title}</h3>
+          <p className="mt-2 text-sm text-muted-foreground">{description}</p>
         </div>
-        <CardTitle className="text-xl">{title}</CardTitle>
-        <CardDescription>
-          {description}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        <div className="text-sm text-muted-foreground max-w-md mx-auto">
-          <p>
-            There are no active elections at this time. Elections are typically
-            announced several weeks in advance through official channels.
+
+        <div className="space-y-6 px-6 pb-6 pt-4">
+          <p className="mx-auto max-w-md text-center text-sm text-muted-foreground">
+            Elections are announced in advance through official channels and
+            written into the contract on-chain.
           </p>
-        </div>
 
-        {showSchedule && (
-          <div className="bg-primary/5 border border-primary/10 rounded-md p-4 text-sm">
-            <h3 className="font-medium mb-2">Next scheduled elections:</h3>
-            
-            {isLoading ? (
-              <p className="text-center text-gray-500 py-2">Loading scheduled elections...</p>
-            ) : scheduledElections.length > 0 ? (
-              <ul className="space-y-2">
-                {scheduledElections.map((election) => (
-                  <li key={election.id} className="flex items-start">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-5 w-5 mr-2 text-primary/70 flex-shrink-0"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
+          {showSchedule && (
+            <div className="border-2 border-border bg-secondary/40 p-4">
+              <div className="b-label mb-3 flex items-center gap-1.5">
+                <Clock className="h-3 w-3" strokeWidth={2.5} />
+                Next scheduled
+              </div>
+
+              {loading ? (
+                <p className="py-2 text-center text-sm text-muted-foreground">
+                  Loading schedule…
+                </p>
+              ) : scheduled.length > 0 ? (
+                <ul className="space-y-2">
+                  {scheduled.map((e) => (
+                    <li
+                      key={e.id}
+                      className="flex items-start gap-3 border-b border-border/40 pb-2 last:border-b-0 last:pb-0"
                     >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                      />
-                    </svg>
-                    <div>
-                      <strong>{election.name}</strong>
-                      <div className="text-muted-foreground">
-                        {election.startTime.toLocaleDateString()} - {election.endTime.toLocaleDateString()}
+                      <span className="mt-0.5 font-mono text-[10px] font-bold text-muted-foreground">
+                        #{String(e.id).padStart(3, "0")}
+                      </span>
+                      <div className="flex-1">
+                        <div className="font-display text-sm font-bold">
+                          {e.name}
+                        </div>
+                        <div className="b-mono text-xs text-muted-foreground">
+                          {e.startTime.toLocaleDateString()} →{" "}
+                          {e.endTime.toLocaleDateString()}
+                        </div>
                       </div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-center text-gray-500 py-2">No scheduled elections at this time.</p>
-            )}
-          </div>
-        )}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="py-2 text-center text-sm text-muted-foreground">
+                  No scheduled elections at this time.
+                </p>
+              )}
+            </div>
+          )}
 
-        {showButtons && (
-          <div className="flex justify-center space-x-4">
-            <Link href="/explorer">
-              <Button variant="outline">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-5 w-5 mr-2"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-                  />
-                </svg>
-                View Past Elections
-              </Button>
-            </Link>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+          {showButtons && (
+            <div className="flex justify-center">
+              <Link href="/explorer">
+                <Button variant="outline">
+                  View Past Elections
+                  <ArrowRight className="ml-1" />
+                </Button>
+              </Link>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }

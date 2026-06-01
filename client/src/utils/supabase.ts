@@ -1,9 +1,17 @@
 import { createClient } from '@supabase/supabase-js';
-import { getActiveElectionId, getElectionInfo } from './blockchain'; 
+import { getActiveElectionId, getElectionsBundle } from './blockchain';
 
-// Initialize the Supabase client
-const supabaseUrl = 'https://yddootrvtrojcwellery.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlkZG9vdHJ2dHJvamN3ZWxsZXJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDIwNDI1ODgsImV4cCI6MjA1NzYxODU4OH0.5GdmK2Sz-R1vnrraGfgAPPKA9d307cq6mxqG4VByeXI';
+// Initialize the Supabase client.
+// Credentials come from Vite env vars — set them in .env.local for dev
+// and in your Vercel project settings for production.
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
+
+if (!supabaseUrl || !supabaseKey) {
+  throw new Error(
+    'Missing Supabase config: set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY in .env.local'
+  );
+}
 
 export const supabase = createClient(supabaseUrl, supabaseKey);
 
@@ -312,39 +320,30 @@ export const isAdminWallet = async (walletAddress: string) => {
   return ADMIN_ADDRESSES.map(addr => addr.toLowerCase()).includes(walletAddress.toLowerCase());
 };
 
-// Check if there's an active election
+// Check if there's an active election.
+// Fetches all elections in ONE multicall instead of N sequential RPC calls.
 export const checkForActiveElection = async (): Promise<boolean> => {
   try {
     console.log("[supabase] Checking for active elections");
-    // Get current election ID
     const nextId = await getActiveElectionId();
-    
-    if (!nextId) {
-      return false;
-    }
+    if (!nextId) return false;
 
-    // Look backwards from current ID to find active elections
-    for (let id = nextId - 1; id >= 1; id--) {
-      try {
-        const electionInfo = await getElectionInfo(id);
-        
-        if (electionInfo?.name) {
-          const now = new Date();
-          const startTime = new Date(electionInfo.startTime);
-          const endTime = new Date(electionInfo.endTime);
-          const isActive = now >= startTime && now <= endTime;
-          
-          // If election is active, return true
-          if (isActive && electionInfo.active) {
-            console.log(`[supabase] Found active election: ${electionInfo.name}`);
-            return true;
-          }
-        }
-      } catch (error) {
-        continue; // Continue checking other election IDs
+    const ids = Array.from({ length: nextId - 1 }, (_, i) => nextId - 1 - i);
+    if (ids.length === 0) return false;
+
+    const bundles = await getElectionsBundle(ids);
+    const now = new Date();
+
+    for (const id of ids) {
+      const bundle = bundles.get(id);
+      if (!bundle?.info?.name) continue;
+      const { startTime, endTime, active } = bundle.info;
+      if (active && now >= startTime && now <= endTime) {
+        console.log(`[supabase] Found active election: ${bundle.info.name}`);
+        return true;
       }
     }
-    
+
     console.log("[supabase] No active elections found");
     return false;
   } catch (error) {

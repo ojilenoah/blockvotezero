@@ -1,104 +1,52 @@
-// Vercel serverless function for API routes
+// Vercel serverless function — self-contained.
+//
+// The client doesn't actually call any /api/* endpoints for its features
+// (everything goes directly to Supabase + the Polygon RPC from the browser),
+// so this exists mainly as a health-check + smoke-test surface and to
+// avoid 404s on /api/* probes from monitoring.
+//
+// IMPORTANT: this file MUST be self-contained. Vercel's Node.js runtime
+// bundles api/*.js as standalone serverless functions; reaching out to
+// TypeScript files under server/ or shared/ will fail at build time.
+
 import express from 'express';
-import { registerRoutes } from '../server/routes';
-import { storage } from '../server/storage';
-import { setupEnv } from '../vercel.mjs';
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-// Simple logging middleware for Vercel environment
-app.use((req, res, next) => {
-  const start = Date.now();
-  const path = req.path;
-  let capturedJsonResponse = undefined;
-
-  const originalResJson = res.json;
-  res.json = function (bodyJson, ...args) {
-    capturedJsonResponse = bodyJson;
-    return originalResJson.apply(res, [bodyJson, ...args]);
-  };
-
-  res.on("finish", () => {
-    const duration = Date.now() - start;
-    if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-      }
-
-      if (logLine.length > 80) {
-        logLine = logLine.slice(0, 79) + "…";
-      }
-
-      console.log(logLine);
-    }
-  });
-
-  next();
-});
-
-// Set up CORS for Vercel deployment
+// CORS — same-origin in production but keep permissive for local probes.
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE');
-  res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With,content-type');
-  res.setHeader('Access-Control-Allow-Credentials', true);
-  
-  // Handle OPTIONS method
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-  
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With, Content-Type');
+  if (req.method === 'OPTIONS') return res.status(200).end();
   next();
 });
 
-// Health check endpoint
-app.get('/api/health', (req, res) => {
-  res.status(200).json({ 
-    status: 'ok', 
+app.get('/api/health', (_req, res) => {
+  res.status(200).json({
+    status: 'ok',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development',
-    apiVersion: '1.0.0'
+    environment: process.env.VERCEL_ENV || process.env.NODE_ENV || 'development',
   });
 });
 
-// Blockchain information endpoint
-app.get('/api/blockchain/info', (req, res) => {
+app.get('/api/blockchain/info', (_req, res) => {
   res.status(200).json({
     contractAddress: process.env.VITE_CONTRACT_ADDRESS || 'Not configured',
     network: 'Polygon Amoy Testnet',
-    timestamp: new Date().toISOString()
+    demoMode: process.env.VITE_DEMO_MODE === 'true',
+    timestamp: new Date().toISOString(),
   });
 });
 
-// Set up error handling middleware
 app.use((err, _req, res, _next) => {
   console.error('API Error:', err);
-  const status = err.status || err.statusCode || 500;
-  const message = err.message || "Internal Server Error";
-
-  res.status(status).json({ 
-    message, 
-    timestamp: new Date().toISOString() 
+  res.status(err.status || err.statusCode || 500).json({
+    message: err.message || 'Internal Server Error',
+    timestamp: new Date().toISOString(),
   });
 });
 
-// Initialize environment variables and server routes
-(async () => {
-  try {
-    // Set up environment variables for Vercel deployment
-    await setupEnv();
-    
-    // Register application routes
-    await registerRoutes(app);
-    
-    console.log('API routes registered successfully');
-  } catch (error) {
-    console.error('Failed to initialize API server:', error);
-  }
-})();
-
-// Export the Express API for Vercel
 export default app;

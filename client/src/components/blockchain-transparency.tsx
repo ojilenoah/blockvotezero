@@ -1,70 +1,133 @@
 import { useEffect, useState } from "react";
-import { Card, CardContent } from "@/components/ui/card";
+import { ExternalLink, Link2 } from "lucide-react";
 import { useMetaMask } from "@/hooks/use-metamask";
-import { CONTRACT_ADDRESS } from "@/utils/blockchain";
+import { Button } from "@/components/ui/button";
+import { CONTRACT_ADDRESS, EXPLORER_BASE_URL, IS_DEMO_MODE } from "@/utils/blockchain";
 
 export function BlockchainTransparency() {
   const { chainId } = useMetaMask();
-  const [explorerBaseUrl, setExplorerBaseUrl] = useState("https://www.oklink.com/amoy");
+  const [explorerBaseUrl, setExplorerBaseUrl] = useState(EXPLORER_BASE_URL);
 
   useEffect(() => {
-    // Update explorer URL based on chain ID
     if (chainId) {
-      const hexChainId = chainId.startsWith("0x") ? chainId : `0x${parseInt(chainId).toString(16)}`;
-      switch (hexChainId.toLowerCase()) {
-        case "0x89": // Polygon Mainnet
+      const hex = chainId.startsWith("0x")
+        ? chainId
+        : `0x${parseInt(chainId).toString(16)}`;
+      switch (hex.toLowerCase()) {
+        case "0x89":
           setExplorerBaseUrl("https://polygonscan.com");
           break;
-        case "0xe9": // Amoy Testnet
-          setExplorerBaseUrl("https://www.oklink.com/amoy");
-          break;
-        // Add other networks as needed
+        case "0x13882":
+        case "0xe9":
         default:
-          setExplorerBaseUrl("https://www.oklink.com/amoy");
+          setExplorerBaseUrl(EXPLORER_BASE_URL);
       }
     }
   }, [chainId]);
 
+  const networkLabel =
+    chainId === "0x13882" || chainId === "0xe9"
+      ? "POLYGON AMOY"
+      : chainId === "0x89"
+      ? "POLYGON MAINNET"
+      : chainId
+      ? "UNKNOWN NETWORK"
+      : "POLYGON AMOY";
+
   return (
-    <div>
-      <Card className="bg-white shadow rounded-lg overflow-hidden">
-        <CardContent className="px-4 py-5 sm:p-6">
-          <h3 className="text-lg leading-6 font-medium text-gray-900">Blockchain Transparency</h3>
-          <div className="mt-2 max-w-xl text-sm text-gray-500">
-            <p>All votes are recorded on the blockchain for complete transparency and verification.</p>
+    <section className="mb-10">
+      <div className="mb-4 flex items-end justify-between border-b-2 border-border pb-2">
+        <h2 className="b-display text-2xl">
+          {IS_DEMO_MODE ? "Demo Backend" : "Transparency"}
+        </h2>
+        <span className="b-label">
+          {IS_DEMO_MODE ? "// supabase" : "// on-chain"}
+        </span>
+      </div>
+
+      <div className="b-card">
+        <div className="grid gap-0 lg:grid-cols-[1.4fr_1fr]">
+          <div className="border-b-2 border-border p-6 lg:border-b-0 lg:border-r-2">
+            {IS_DEMO_MODE ? (
+              <>
+                <h3 className="b-display text-2xl">Running in Demo Mode.</h3>
+                <p className="mt-3 max-w-md text-sm text-muted-foreground">
+                  Elections, candidates, and votes live in Supabase tables —
+                  not on a public blockchain. The flow is identical, but
+                  there's no gas, no contract, and nothing externally
+                  verifiable. Flip <span className="font-mono text-foreground">VITE_DEMO_MODE=false</span> to
+                  switch over to the real Polygon contract.
+                </p>
+              </>
+            ) : (
+              <>
+                <h3 className="b-display text-2xl">Every Vote, Verifiable.</h3>
+                <p className="mt-3 max-w-md text-sm text-muted-foreground">
+                  The contract behind every BlockVote election is open-source
+                  and deployed on a public testnet. Anyone — voter, observer,
+                  journalist — can independently confirm every ballot.
+                </p>
+
+                <a
+                  href={`${explorerBaseUrl}/address/${CONTRACT_ADDRESS}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-6 inline-block"
+                >
+                  <Button variant="foreground">
+                    View Contract on Explorer
+                    <ExternalLink className="h-4 w-4" strokeWidth={2.5} />
+                  </Button>
+                </a>
+              </>
+            )}
           </div>
-          <div className="mt-4">
-            <div className="bg-gray-50 p-4 rounded-md border border-gray-200">
-              <div className="flex flex-col space-y-3">
-                <div className="flex items-center">
-                  <div className="w-20 text-xs font-medium text-gray-500">Contract</div>
-                  <div className="flex-1 text-xs font-mono text-gray-900 truncate">{CONTRACT_ADDRESS}</div>
-                </div>
-                <div className="flex items-center">
-                  <div className="w-20 text-xs font-medium text-gray-500">Network</div>
-                  <div className="flex-1 text-xs text-gray-900">
-                    {chainId ? (
-                      chainId === "0xe9" ? "POLYGON AMOY NETWORK" : "POLYGON NETWORK"
-                    ) : (
-                      "Unknown Network"
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="mt-4 text-sm">
-              <a 
-                href={`${explorerBaseUrl}/address/${CONTRACT_ADDRESS}`}
-                target="_blank"
-                rel="noopener noreferrer" 
-                className="font-medium text-primary hover:text-blue-500"
-              >
-                View contract on Explorer <span aria-hidden="true">→</span>
-              </a>
+
+          <div className="p-6">
+            <div className="space-y-4">
+              {IS_DEMO_MODE ? (
+                <>
+                  <Row label="Backend" value="Supabase Postgres" />
+                  <Row label="Tables" value="elections · candidates · votes" mono />
+                  <Row label="Wallet" value="Demo (localStorage)" />
+                </>
+              ) : (
+                <>
+                  <Row label="Contract" value={CONTRACT_ADDRESS} mono />
+                  <Row label="Network" value={networkLabel} />
+                  <Row label="Standard" value="Custom VotingSystem ABI" />
+                </>
+              )}
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function Row({
+  label,
+  value,
+  mono = false,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
+  return (
+    <div className="border-b-2 border-dashed border-border/40 pb-3 last:border-b-0 last:pb-0">
+      <div className="b-label flex items-center gap-1.5">
+        <Link2 className="h-3 w-3" strokeWidth={2.5} />
+        {label}
+      </div>
+      <div
+        className={`mt-1 break-all text-sm font-bold ${
+          mono ? "b-mono" : "font-display"
+        }`}
+      >
+        {value}
+      </div>
     </div>
   );
 }

@@ -1,133 +1,246 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
+import { Loader2, Mail, Lock, ShieldCheck } from "lucide-react";
+import { motion } from "framer-motion";
+
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useToast } from "@/hooks/use-toast";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { useMetaMask } from "../../hooks/use-metamask";
-import { Loader2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 import { Navbar } from "@/components/navbar";
+import { fadeUp } from "@/lib/motion";
+
+type Mode = "signin" | "signup";
 
 export default function AdminLogin() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { isAuthenticated, loading, signIn, signUp } = useAuth();
+
+  const [mode, setMode] = useState<Mode>("signin");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Use the MetaMask hook
-  const { 
-    isMetaMaskInstalled,
-    isConnecting,
-    isConnected,
-    account,
-    connect
-  } = useMetaMask();
-
-  // List of authorized admin addresses
-  const ADMIN_ADDRESSES = [
-    "0x2B3d7c0A2A05f760272165A836D1aDFE8ea38490", // Authorized admin address
-  ];
-
-  // Check if the connected account is an admin
+  // If already signed in, jump straight to the dashboard
   useEffect(() => {
-    if (isConnected && account) {
-      // Convert addresses to lowercase for case-insensitive comparison
-      const normalizedAccount = account.toLowerCase();
-      const normalizedAdminAddresses = ADMIN_ADDRESSES.map(addr => addr.toLowerCase());
-
-      const isAdmin = normalizedAdminAddresses.includes(normalizedAccount);
-
-      if (isAdmin) {
-        toast({
-          title: "Authentication successful",
-          description: "Welcome, admin!",
-          variant: "default",
-        });
-
-        // Store admin status in session storage
-        sessionStorage.setItem("isAdmin", "true");
-        sessionStorage.setItem("adminAddress", account);
-
-        // Redirect to admin dashboard
-        setLocation("/admin/dashboard");
-      } else {
-        setError("This wallet is not authorized as an admin. Please connect with the admin wallet.");
-      }
+    if (!loading && isAuthenticated) {
+      setLocation("/admin/dashboard");
     }
-  }, [isConnected, account, toast, setLocation]);
+  }, [loading, isAuthenticated, setLocation]);
 
-  const handleConnectWallet = async () => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     setError(null);
+
+    if (!email || !password) {
+      setError("Email and password are required.");
+      return;
+    }
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters.");
+      return;
+    }
+
+    setSubmitting(true);
     try {
-      await connect();
+      const fn = mode === "signin" ? signIn : signUp;
+      const { data, error } = await fn(email.trim(), password);
+
+      if (error) {
+        setError(error.message);
+        return;
+      }
+
+      // Signup with email confirmation enabled returns a user but no session.
+      if (mode === "signup" && !data.session) {
+        toast({
+          title: "Check your email",
+          description:
+            "We sent a confirmation link. Open it, then return here to sign in.",
+        });
+        setMode("signin");
+        setPassword("");
+        return;
+      }
+
+      toast({
+        title: mode === "signin" ? "Welcome back" : "Account created",
+        description: `Signed in as ${email}`,
+      });
+      setLocation("/admin/dashboard");
     } catch (err: any) {
-      setError(err.message || "Failed to connect to MetaMask. Please try again.");
-      console.error(err);
+      setError(err?.message || "Something went wrong. Try again.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
+    <div className="min-h-screen flex flex-col bg-background">
       <Navbar />
-      <div className="flex-1 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl font-bold text-center">Admin Login</CardTitle>
-            <CardDescription className="text-center">
-              Connect your admin wallet to manage elections
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {error && (
-              <Alert variant="destructive" className="mb-4">
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
 
-            <div className="flex flex-col space-y-4">
-              <Button 
-                className="w-full" 
-                size="lg"
-                onClick={handleConnectWallet}
-                disabled={isConnecting}
-              >
-                {isConnecting ? (
-                  <span className="flex items-center">
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Connecting...
-                  </span>
-                ) : (
-                  <span className="flex items-center">
-                    <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 35 33" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M32.9582 1L17.9582 10.0000L16.9582 4.8369L32.9582 1Z" fill="#E17726" stroke="#E17726" strokeWidth="0.25" strokeLinecap="round" strokeLinejoin="round"/>
-                      <path d="M2.83203 1L17.6514 10.0000L18.8329 4.8369L2.83203 1Z" fill="#E27625" stroke="#E27625" strokeWidth="0.25" strokeLinecap="round" strokeLinejoin="round"/>
-                      <path d="M28.2783 23.5088L24.7334 28.7866L32.0894 30.7866L34.1761 23.6369L28.2783 23.5088Z" fill="#E27625" stroke="#E27625" strokeWidth="0.25" strokeLinecap="round" strokeLinejoin="round"/>
-                      <path d="M1.62695 23.6292L3.70728 30.7789L11.0567 28.7789L7.51837 23.5011L1.62695 23.6292Z" fill="#E27625" stroke="#E27625" strokeWidth="0.25" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                    Connect with MetaMask
-                  </span>
-                )}
-              </Button>
-
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t"></span>
+      <div className="flex flex-1 items-center justify-center p-4">
+        <motion.div
+          initial="hidden"
+          animate="visible"
+          variants={fadeUp}
+          className="w-full max-w-md"
+        >
+          <div className="b-card">
+            {/* Header */}
+            <div className="flex items-center gap-3 border-b-2 border-border bg-foreground px-6 py-4 text-background">
+              <div className="flex h-10 w-10 items-center justify-center border-2 border-background bg-primary text-primary-foreground">
+                <ShieldCheck className="h-5 w-5" strokeWidth={2.5} />
+              </div>
+              <div>
+                <div className="font-mono text-[10px] uppercase tracking-[0.15em] opacity-70">
+                  // admin
                 </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-background px-2 text-muted-foreground">
-                    Secure Authentication
-                  </span>
+                <h1 className="b-display text-xl">Restricted Console</h1>
+              </div>
+            </div>
+
+            {/* Mode toggle */}
+            <div className="flex border-b-2 border-border">
+              <ModeTab
+                active={mode === "signin"}
+                onClick={() => {
+                  setMode("signin");
+                  setError(null);
+                }}
+              >
+                Sign In
+              </ModeTab>
+              <ModeTab
+                active={mode === "signup"}
+                onClick={() => {
+                  setMode("signup");
+                  setError(null);
+                }}
+              >
+                Sign Up
+              </ModeTab>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-5 p-6">
+              {error && (
+                <Alert variant="destructive">
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+
+              <div className="space-y-2">
+                <Label
+                  htmlFor="email"
+                  className="font-mono text-[10px] font-bold uppercase tracking-[0.15em]"
+                >
+                  Email
+                </Label>
+                <div className="relative">
+                  <Mail
+                    className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                    strokeWidth={2.5}
+                  />
+                  <Input
+                    id="email"
+                    type="email"
+                    autoComplete="email"
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="pl-9"
+                    disabled={submitting}
+                  />
                 </div>
               </div>
 
-              <p className="text-sm text-center text-gray-500">
-                Only authorized wallets can access the admin panel.
-                <br />
-                Make sure you have MetaMask installed.
+              <div className="space-y-2">
+                <Label
+                  htmlFor="password"
+                  className="font-mono text-[10px] font-bold uppercase tracking-[0.15em]"
+                >
+                  Password
+                </Label>
+                <div className="relative">
+                  <Lock
+                    className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                    strokeWidth={2.5}
+                  />
+                  <Input
+                    id="password"
+                    type="password"
+                    autoComplete={
+                      mode === "signin" ? "current-password" : "new-password"
+                    }
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="pl-9"
+                    disabled={submitting}
+                  />
+                </div>
+                {mode === "signup" && (
+                  <p className="font-mono text-[10px] text-muted-foreground">
+                    Minimum 6 characters.
+                  </p>
+                )}
+              </div>
+
+              <Button type="submit" size="lg" className="w-full" disabled={submitting}>
+                {submitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    {mode === "signin" ? "Signing in…" : "Creating account…"}
+                  </>
+                ) : mode === "signin" ? (
+                  "Sign In"
+                ) : (
+                  "Create Account"
+                )}
+              </Button>
+
+              <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground text-center">
+                Authenticated via Supabase Auth · no wallet required
               </p>
-            </div>
-          </CardContent>
-        </Card>
+            </form>
+          </div>
+        </motion.div>
       </div>
     </div>
+  );
+}
+
+function ModeTab({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`
+        relative flex-1 px-4 py-3
+        font-display text-sm font-bold uppercase tracking-wide
+        transition-colors
+        ${active ? "bg-card text-foreground" : "bg-secondary/40 text-muted-foreground hover:text-foreground"}
+      `}
+    >
+      {children}
+      {active && (
+        <motion.span
+          layoutId="admin-tab-underline"
+          className="absolute inset-x-2 -bottom-0.5 h-1 bg-primary"
+        />
+      )}
+    </button>
   );
 }

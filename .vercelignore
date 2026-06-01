@@ -1,25 +1,48 @@
+# VCS / IDE
 .git
+.gitignore
 .vscode
 /.github
+
+# Dependencies
 node_modules
+
+# Env / secrets
+.env
 .env.local
-README.md
-*.log
+.env.*.local
+
+# OS / editor
 .DS_Store
+*.log
+*.tar.gz
+
+# Replit (legacy host) — Vercel doesn't need any of this
 .replit
 .upm
 .config
 replit.nix
 replit.toml
-.replit
 
-# Test files and scripts
+# Dev / test scripts — never executed in production
 test-*.js
 test-*.mjs
+test-*.ts
 show-*.js
 show-*.mjs
-*-test.js
-*-test.ts
+scripts/
+
+# Top-level legacy duplicate of client/src/utils/blockchain.ts
+/utils/
+
+# Project notes / academic docs
+attached_assets/
 chapter4.md
 diagrams.md
-attached_assets/
+README.md
+
+# Legacy non-functional Vercel config
+vercel.mjs
+
+# Local-only Express server entry — Vercel uses api/ instead
+# (still kept in repo for `npm run dev` locally)

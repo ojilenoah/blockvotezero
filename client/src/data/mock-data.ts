@@ -1,11 +1,14 @@
 // This file contains placeholder data for the election voting system
 // In a real application, this would be fetched from a backend API
 
+// Brutalist palette — high-contrast hues that read at small sizes.
 export const candidateColors = [
-  'rgb(59, 130, 246)',   // blue-500
-  'rgb(99, 102, 241)',   // indigo-500
-  'rgb(168, 85, 247)',   // purple-500
-  'rgb(236, 72, 153)',   // pink-500
+  '#FF4D00',  // signal orange
+  '#0A0A0A',  // ink
+  '#00874D',  // deep green
+  '#1E40AF',  // cobalt
+  '#7C3AED',  // violet
+  '#DC2626',  // siren red
 ];
 
 export const mockElectionData = {

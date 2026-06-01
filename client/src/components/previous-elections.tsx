@@ -1,17 +1,19 @@
 import { useState, useEffect } from "react";
-import { getActiveElectionId, getElectionInfo, getTotalVotes } from "@/utils/blockchain";
+import {
+  getActiveElectionId,
+  getElectionsBundle,
+} from "@/utils/blockchain";
 import { NoActiveElection } from "@/components/no-active-election";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { ChevronLeft, ChevronRight, FileText } from "lucide-react";
 
 interface Election {
   id: number;
   name: string;
-  dateRange: string;
   startTime: Date;
   endTime: Date;
-  status: string;
-  totalVotes?: number;
+  totalVotes: number;
 }
 
 interface PreviousElectionsProps {
@@ -19,109 +21,75 @@ interface PreviousElectionsProps {
   itemsPerPage?: number;
 }
 
-export function PreviousElections({ 
+export function PreviousElections({
   title = "Previous Elections",
-  itemsPerPage = 4 
+  itemsPerPage = 4,
 }: PreviousElectionsProps) {
-  const [previousElections, setPreviousElections] = useState<Election[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [currentPage, setCurrentPage] = useState<number>(1);
-  
-  // Calculate pagination values
-  const totalElections = previousElections.length;
-  const totalPages = Math.ceil(totalElections / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = Math.min(startIndex + itemsPerPage, totalElections);
-  const currentElections = previousElections.slice(startIndex, endIndex);
-  
-  const handleNextPage = () => {
-    if (currentPage < totalPages) {
-      setCurrentPage(currentPage + 1);
-    }
-  };
-  
-  const handlePrevPage = () => {
-    if (currentPage > 1) {
-      setCurrentPage(currentPage - 1);
-    }
-  };
-  
+  const [elections, setElections] = useState<Election[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [page, setPage] = useState(1);
+
+  const totalPages = Math.max(1, Math.ceil(elections.length / itemsPerPage));
+  const startIdx = (page - 1) * itemsPerPage;
+  const endIdx = Math.min(startIdx + itemsPerPage, elections.length);
+  const visible = elections.slice(startIdx, endIdx);
+
   useEffect(() => {
-    const fetchPreviousElections = async () => {
+    const fetch = async () => {
       setIsLoading(true);
       try {
-        const currentElectionId = await getActiveElectionId();
-        const elections: Election[] = [];
-        
-        // Optimized batch loading - get latest elections first working backwards
-        const maxElectionsToCheck = Math.min(currentElectionId - 1, 15); // Limit to 15 to improve speed
-        
-        // Use Promise.allSettled for parallel requests to improve speed
-        const electionPromises = [];
-        for (let id = Math.max(1, currentElectionId - maxElectionsToCheck); id < currentElectionId; id++) {
-          electionPromises.push(
-            Promise.allSettled([
-              getElectionInfo(id),
-              getTotalVotes(id)
-            ]).then(([electionResult, votesResult]) => {
-              if (electionResult.status === 'fulfilled' && electionResult.value?.name) {
-                const electionInfo = electionResult.value;
-                const totalVotes = votesResult.status === 'fulfilled' ? votesResult.value : 0;
-                const now = new Date();
-                const endTime = new Date(electionInfo.endTime);
-                
-                // Only include elections that have ended
-                if (endTime < now) {
-                  return {
-                    id,
-                    name: electionInfo.name,
-                    dateRange: `${new Date(electionInfo.startTime).toLocaleDateString()} - ${endTime.toLocaleDateString()}`,
-                    startTime: new Date(electionInfo.startTime),
-                    endTime: endTime,
-                    status: "Completed",
-                    totalVotes
-                  };
-                }
-              }
-              return null;
-            })
-          );
+        const nextId = await getActiveElectionId();
+        if (nextId <= 1) {
+          setElections([]);
+          return;
         }
-        
-        const results = await Promise.all(electionPromises);
-        const validElections = results.filter(election => election !== null) as Election[];
-        elections.push(...validElections);
-        
-        // Sort elections by end date, most recent first
-        elections.sort((a, b) => b.endTime.getTime() - a.endTime.getTime());
-        
-        setPreviousElections(elections);
-      } catch (error) {
-        console.error("Error fetching previous elections:", error);
+        // Cap how far back we go for performance
+        const maxLookback = Math.min(nextId - 1, 15);
+        const ids = Array.from(
+          { length: maxLookback },
+          (_, i) => nextId - 1 - i
+        );
+        const bundles = await getElectionsBundle(ids);
+        const now = new Date();
+        const completed: Election[] = [];
+        for (const id of ids) {
+          const b = bundles.get(id);
+          if (!b?.info?.name) continue;
+          if (b.info.endTime < now) {
+            completed.push({
+              id,
+              name: b.info.name,
+              startTime: b.info.startTime,
+              endTime: b.info.endTime,
+              totalVotes: b.totalVotes,
+            });
+          }
+        }
+        completed.sort((a, b) => b.endTime.getTime() - a.endTime.getTime());
+        setElections(completed);
+      } catch (err) {
+        console.error("Error fetching previous elections:", err);
       } finally {
         setIsLoading(false);
       }
     };
-    
-    fetchPreviousElections();
+    fetch();
   }, []);
-  
+
   if (isLoading) {
     return (
-      <div className="mb-8">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">{title}</h2>
-        <div className="bg-white shadow overflow-hidden sm:rounded-md p-6 text-center text-gray-500">
-          Loading previous elections...
+      <Section title={title}>
+        <div className="b-card flex h-32 items-center justify-center">
+          <span className="b-label">// loading archive…</span>
         </div>
-      </div>
+      </Section>
     );
   }
-  
-  if (previousElections.length === 0) {
+
+  if (elections.length === 0) {
     return (
-      <div className="mb-8">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">{title}</h2>
-        <div className="bg-white shadow sm:rounded-md">
+      <Section title={title}>
+        <div className="b-card">
           <div className="p-6">
             <NoActiveElection
               title="No Previous Elections"
@@ -131,63 +99,79 @@ export function PreviousElections({
             />
           </div>
         </div>
-      </div>
+      </Section>
     );
   }
 
   return (
-    <div className="mb-8">
-      <h2 className="text-xl font-semibold text-gray-900 mb-4">{title}</h2>
-      <div className="bg-white shadow overflow-hidden sm:rounded-md">
-        <ul className="divide-y divide-gray-200">
-          {currentElections.map((election) => (
-            <li key={election.id} className="px-6 py-4">
-              <div className="flex items-center justify-between">
-                <div className="flex-1">
-                  <h3 className="text-lg font-medium text-gray-900">{election.name}</h3>
-                  <p className="text-sm text-gray-500">{election.dateRange}</p>
-                  <p className="text-sm text-gray-600 mt-1">
-                    Total Votes: {election.totalVotes || 0}
-                  </p>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                    {election.status}
-                  </span>
-                </div>
+    <Section title={title}>
+      <div className="b-card divide-y-2 divide-border">
+        {visible.map((e, i) => (
+          <div
+            key={e.id}
+            className="grid grid-cols-[auto_1fr_auto] items-center gap-4 p-5 transition-colors hover:bg-secondary/40"
+          >
+            <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center border-2 border-border bg-secondary">
+              <FileText className="h-5 w-5" strokeWidth={2.5} />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-3">
+                <span className="font-mono text-[10px] font-bold text-muted-foreground">
+                  #{String(e.id).padStart(3, "0")}
+                </span>
+                <span className="b-label">
+                  {e.startTime.toLocaleDateString()} → {e.endTime.toLocaleDateString()}
+                </span>
               </div>
-            </li>
-          ))}
-        </ul>
-      </div>
-      
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between mt-4">
-          <div className="text-sm text-gray-700">
-            Showing {startIndex + 1} to {endIndex} of {totalElections} elections
+              <h3 className="font-display truncate text-lg font-bold">
+                {e.name}
+              </h3>
+              <div className="b-label-fg mt-0.5 b-mono">
+                {e.totalVotes.toLocaleString()} votes recorded
+              </div>
+            </div>
+            <Badge variant="success">Final</Badge>
           </div>
-          <div className="flex space-x-2">
+        ))}
+      </div>
+
+      {totalPages > 1 && (
+        <div className="mt-4 flex items-center justify-between">
+          <span className="b-label">
+            {startIdx + 1}–{endIdx} of {elections.length}
+          </span>
+          <div className="flex gap-2">
             <Button
               variant="outline"
               size="sm"
-              onClick={handlePrevPage}
-              disabled={currentPage === 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
             >
-              <ChevronLeft className="h-4 w-4 mr-1" />
-              Previous
+              <ChevronLeft className="h-4 w-4" /> Prev
             </Button>
             <Button
               variant="outline"
               size="sm"
-              onClick={handleNextPage}
-              disabled={currentPage === totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
             >
-              Next
-              <ChevronRight className="h-4 w-4 ml-1" />
+              Next <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
         </div>
       )}
-    </div>
+    </Section>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="mb-10">
+      <div className="mb-4 flex items-end justify-between border-b-2 border-border pb-2">
+        <h2 className="b-display text-2xl">{title}</h2>
+        <span className="b-label">// archive</span>
+      </div>
+      {children}
+    </section>
   );
 }

@@ -3,14 +3,23 @@ import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "@/lib/utils"
 
+// Brutalist alert: thick border, no radius, tinted bg per variant.
+// Variants resolve to semantic tokens so they theme cleanly in dark mode.
 const alertVariants = cva(
-  "relative w-full rounded-lg border p-4 [&>svg~*]:pl-7 [&>svg+div]:translate-y-[-3px] [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4 [&>svg]:text-foreground",
+  "relative w-full border-2 p-4 [&>svg~*]:pl-7 [&>svg+div]:translate-y-[-3px] [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4",
   {
     variants: {
       variant: {
-        default: "bg-background text-foreground",
+        default:
+          "bg-card text-card-foreground border-border [&>svg]:text-foreground",
         destructive:
-          "border-destructive/50 text-destructive dark:border-destructive [&>svg]:text-destructive",
+          "bg-destructive/10 text-foreground border-destructive [&>svg]:text-destructive",
+        warning:
+          "bg-warning/15 text-foreground border-warning [&>svg]:text-warning",
+        success:
+          "bg-success/10 text-foreground border-success [&>svg]:text-success",
+        info:
+          "bg-primary/10 text-foreground border-primary [&>svg]:text-primary",
       },
     },
     defaultVariants: {
@@ -38,7 +47,7 @@ const AlertTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <h5
     ref={ref}
-    className={cn("mb-1 font-medium leading-none tracking-tight", className)}
+    className={cn("mb-1 font-display font-bold leading-none tracking-tight", className)}
     {...props}
   />
 ))
@@ -50,7 +59,7 @@ const AlertDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn("text-sm [&_p]:leading-relaxed", className)}
+    className={cn("text-sm text-muted-foreground [&_p]:leading-relaxed", className)}
     {...props}
   />
 ))

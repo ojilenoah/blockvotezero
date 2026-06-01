@@ -29,7 +29,7 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider defaultTheme="light" storageKey="blockvote-theme">
+      <ThemeProvider defaultTheme="system" storageKey="blockvote-theme">
         <Router />
         <Toaster />
       </ThemeProvider>
